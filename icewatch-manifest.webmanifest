@@ -1,0 +1,44 @@
+{
+  "name": "ICEWATCH — LE COMMANDANT CHARCOT",
+  "short_name": "ICEWATCH",
+  "description": "Outil de repérage hélicoptère de la glace. Carte GPS, trace de vol, points d'intérêt, photos géolocalisées.",
+  "id": "./ICEWATCHNT.html",
+  "start_url": "./ICEWATCHNT.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#050d18",
+  "theme_color": "#091525",
+  "lang": "fr",
+  "categories": ["navigation", "productivity"],
+  "icons": [
+    {
+      "src": "pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Carte de vol",
+      "short_name": "Carte",
+      "description": "Ouvrir directement la page carte",
+      "url": "./ICEWATCHNT.html#carte",
+      "icons": [{ "src": "pwa-icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
