@@ -24,6 +24,7 @@
   --hull:#d45c28;--green:#3db86a;--danger:#d84040;--warn:#d47828;
   --text:#d5e8f7;--text2:#8fb2d0;--text3:#6f90ae;
   --sw:230px;
+  --ui-zoom:1;
   --logo-bg:rgba(5,13,24,.95);
   --modal-bg:rgba(0,0,0,.82);
   --shadow:0 4px 28px rgba(0,0,0,.6);
@@ -45,7 +46,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 
 /* ── SIDEBAR ── */
 #sidebar{width:var(--sw);min-width:var(--sw);background:var(--bg2);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;z-index:100;overflow:hidden;position:relative;}
+  display:flex;flex-direction:column;z-index:100;overflow:hidden;position:relative;
+  transform-origin:left top;zoom:var(--ui-zoom);}
+/* Collapse sidebar (plein écran carte) */
+#app.sb-collapsed #sidebar{display:none;}
+#sb-collapse{position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:16px;height:52px;background:var(--bg3);border:1px solid var(--border2);
+  border-left:none;border-radius:0 8px 8px 0;display:flex;align-items:center;
+  justify-content:center;cursor:pointer;z-index:150;color:var(--accent2);
+  font-size:11px;transition:left .2s;user-select:none;}
+#sb-collapse:hover{background:var(--bg2);color:var(--accent);}
+@media(max-width:700px){#sb-collapse{display:none;}}
 /* sidebar-nav : zone défilante qui prend tout l'espace disponible */
 #sidebar-nav{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
   display:flex;flex-direction:column;}
@@ -594,6 +605,8 @@ select.f-ctrl option{background:var(--bg3);}
 
 /* Hamburger masqué par défaut (desktop) */
 #hamburger { display: none; }
+/* Zoom interface sur toolbar buttons */
+.tb-rows{zoom:var(--ui-zoom);}
 
 /* ── COCKPIT VIEW ── */
 #view-cockpit.active{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;background:#000;}
@@ -759,6 +772,8 @@ select.f-ctrl option{background:var(--bg3);}
 
 <!-- ══════════════ MAIN ══════════════ -->
 <div id="main">
+  <!-- Bouton collapse sidebar (plein écran carte) -->
+  <div id="sb-collapse" onclick="toggleSidebarCollapse()" title="Masquer/afficher le panneau">‹</div>
 
   <!-- TOOLBAR -->
   <div id="toolbar">
@@ -1309,18 +1324,52 @@ select.f-ctrl option{background:var(--bg3);}
 
     <!-- TAILLE DE POLICE -->
     <div class="settings-section">
-      <div class="settings-section-title">Taille de l'interface</div>
+      <div class="settings-section-title">Taille du texte</div>
       <div class="settings-row">
-        <span class="settings-lbl">Petite</span>
-        <input type="range" id="settings-font-slider" min="13" max="22" value="17" step="1" oninput="applyFontSize(this.value)">
-        <span class="settings-lbl">Grande</span>
+        <span class="settings-lbl">A</span>
+        <input type="range" id="settings-font-slider" min="13" max="28" value="17" step="1" oninput="applyFontSize(this.value)" style="flex:1">
+        <span class="settings-lbl" style="font-size:1.3em">A</span>
         <span class="settings-val" id="set-font-val">17px</span>
       </div>
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <button class="btn btn-s" onclick="applyFontSize(13)">Petite</button>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button class="btn btn-s" onclick="applyFontSize(13)">XS</button>
+        <button class="btn btn-s" onclick="applyFontSize(15)">Petite</button>
         <button class="btn btn-s" onclick="applyFontSize(17)">Normale</button>
         <button class="btn btn-s" onclick="applyFontSize(20)">Grande</button>
-        <button class="btn btn-s" onclick="applyFontSize(22)">XL</button>
+        <button class="btn btn-s" onclick="applyFontSize(23)">XL</button>
+        <button class="btn btn-s" onclick="applyFontSize(26)">XXL</button>
+        <button class="btn btn-s" onclick="applyFontSize(28)">Géant</button>
+      </div>
+    </div>
+
+    <!-- ZOOM INTERFACE (icônes, boutons) -->
+    <div class="settings-section">
+      <div class="settings-section-title">Zoom des boutons et icônes</div>
+      <div class="settings-row">
+        <span class="settings-lbl">100%</span>
+        <input type="range" id="settings-zoom-slider" min="0.85" max="1.6" value="1" step="0.05" oninput="applyUiZoom(this.value)" style="flex:1">
+        <span class="settings-lbl">160%</span>
+        <span class="settings-val" id="set-zoom-val">100%</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button class="btn btn-s" onclick="applyUiZoom(0.85)">85%</button>
+        <button class="btn btn-s" onclick="applyUiZoom(1.0)">Normal</button>
+        <button class="btn btn-s" onclick="applyUiZoom(1.2)">120%</button>
+        <button class="btn btn-s" onclick="applyUiZoom(1.4)">140%</button>
+        <button class="btn btn-s" onclick="applyUiZoom(1.6)">160%</button>
+      </div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-top:4px">Agrandit la barre de navigation et les boutons de la carte</div>
+    </div>
+
+    <!-- PLEIN ÉCRAN CARTE -->
+    <div class="settings-section">
+      <div class="settings-section-title">Affichage carte</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-lbl">Masquer le panneau de gauche</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">Plein écran sur la carte — utiliser le bouton ‹ › sur le bord de la carte</div>
+        </div>
+        <label class="tog-wrap"><input type="checkbox" id="set-sidebar-collapse" onchange="toggleSidebarCollapse(this.checked)"><span class="tog-slider"></span></label>
       </div>
     </div>
 
@@ -3905,13 +3954,38 @@ function _updateGPSSettingsUI(){
 }
 
 function applyFontSize(px){
-  px=Math.max(13,Math.min(22,parseInt(px)));
+  px=Math.max(13,Math.min(28,parseInt(px)));
   document.body.style.fontSize=px+'px';
   localStorage.setItem('icewatch-font-size',px);
   const slider=document.getElementById('settings-font-slider');
   const val=document.getElementById('set-font-val');
   if(slider) slider.value=px;
   if(val) val.textContent=px+'px';
+}
+
+function applyUiZoom(v){
+  v=Math.max(0.85,Math.min(1.6,parseFloat(v)));
+  document.documentElement.style.setProperty('--ui-zoom',v);
+  localStorage.setItem('icewatch-ui-zoom',v);
+  const slider=document.getElementById('settings-zoom-slider');
+  const val=document.getElementById('set-zoom-val');
+  if(slider) slider.value=v;
+  if(val) val.textContent=Math.round(v*100)+'%';
+  // Invalider la taille de la carte après le zoom
+  setTimeout(()=>{ if(typeof map!=='undefined') map.invalidateSize(); },200);
+}
+
+let _sbCollapsed=false;
+function toggleSidebarCollapse(force){
+  const newState=(force!==undefined)?force:!_sbCollapsed;
+  _sbCollapsed=newState;
+  document.getElementById('app').classList.toggle('sb-collapsed',_sbCollapsed);
+  const btn=document.getElementById('sb-collapse');
+  if(btn) btn.textContent=_sbCollapsed?'›':'‹';
+  const cb=document.getElementById('set-sidebar-collapse');
+  if(cb) cb.checked=_sbCollapsed;
+  localStorage.setItem('icewatch-sb-collapsed',_sbCollapsed?'1':'0');
+  setTimeout(()=>{ if(typeof map!=='undefined') map.invalidateSize(); },250);
 }
 
 function openSettings(){
@@ -3926,6 +4000,15 @@ function openSettings(){
   const val=document.getElementById('set-font-val');
   if(slider) slider.value=storedFs;
   if(val) val.textContent=storedFs+'px';
+  // Zoom interface
+  const storedZoom=parseFloat(localStorage.getItem('icewatch-ui-zoom'))||1;
+  const zslider=document.getElementById('settings-zoom-slider');
+  const zval=document.getElementById('set-zoom-val');
+  if(zslider) zslider.value=storedZoom;
+  if(zval) zval.textContent=Math.round(storedZoom*100)+'%';
+  // Sidebar collapse
+  const cbColl=document.getElementById('set-sidebar-collapse');
+  if(cbColl) cbColl.checked=_sbCollapsed;
   // Token IcySea
   const token=localStorage.getItem('icewatch-icysea-token')||'';
   const inp=document.getElementById('icysea-token-input');
@@ -4870,6 +4953,11 @@ document.addEventListener('DOMContentLoaded',async()=>{
   document.body.style.fontSize=savedFs+'px';
   const fsSl=document.getElementById('settings-font-slider');
   if(fsSl) fsSl.value=savedFs;
+  // Restaurer zoom interface
+  const savedZoom=parseFloat(localStorage.getItem('icewatch-ui-zoom'))||1;
+  document.documentElement.style.setProperty('--ui-zoom',savedZoom);
+  // Restaurer état sidebar collapse
+  if(localStorage.getItem('icewatch-sb-collapsed')==='1') toggleSidebarCollapse(true);
   // GPS : démarrage automatique
   startGPS();
   updateCacheInfo();
