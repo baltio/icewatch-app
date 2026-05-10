@@ -107,7 +107,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
   radial-gradient(circle,rgba(160,205,240,.65) 0 .9px,transparent 1.4px);
   background-size:26px 14px,20px 12px;animation:snowFallB 11.5s linear infinite;opacity:.42;filter:blur(.25px);}
 .tb-head{display:flex;align-items:center;gap:8px;min-height:28px;z-index:1;position:relative;}
-.tb-rows{display:flex;align-items:center;gap:4px;min-height:32px;z-index:1;position:relative;overflow-x:auto;padding-bottom:2px;}
+/* Conteneur scroll avec dégradé fadeout droite pour indiquer qu'il y a plus de boutons */
+.tb-rows-wrap{position:relative;flex:1;min-width:0;}
+.tb-rows-wrap::after{content:'';position:absolute;top:0;right:0;bottom:0;width:32px;
+  background:linear-gradient(to right,transparent,var(--bg2));pointer-events:none;z-index:2;}
+.tb-rows{display:flex;align-items:center;gap:4px;min-height:32px;z-index:1;position:relative;overflow-x:auto;padding-bottom:2px;padding-right:36px;}
 .tb-title{font-family:'Teko',sans-serif;font-size:18px;letter-spacing:2px;color:var(--text);flex:1;line-height:1;}
 .tb-btn{display:flex;align-items:center;gap:4px;padding:4px 10px;background:transparent;
   border:1px solid var(--border2);border-radius:3px;color:var(--text2);
@@ -203,9 +207,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 /* ── ALTITUDE LEGEND ── */
 #alt-legend{position:absolute;top:12px;right:12px;z-index:500;
   background:rgba(5,13,24,.92);border:1px solid var(--border2);border-radius:4px;
-  padding:8px 10px;backdrop-filter:blur(8px);box-shadow:var(--shadow);}
+  padding:8px 10px;backdrop-filter:blur(8px);box-shadow:var(--shadow);white-space:nowrap;}
 .leg-title{font-family:'Teko',sans-serif;font-size:11px;letter-spacing:1.5px;color:var(--text);margin-bottom:4px;}
-.leg-item{display:flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);margin-bottom:2px;}
+.leg-item{display:flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);margin-bottom:2px;white-space:nowrap;}
 .leg-col{width:20px;height:4px;border-radius:2px;flex-shrink:0;}
 
 /* ── GPS LIVE BAR ── */
@@ -798,6 +802,7 @@ select.f-ctrl option{background:var(--bg3);}
       <span class="tb-title" id="tb-title">CARTE MARITIME — REPÉRAGE GLACE</span>
       <button class="tb-btn" onclick="toggleTheme()">🌓</button>
     </div>
+    <div class="tb-rows-wrap">
     <div class="tb-rows" id="tb-map-rows">
       <button class="tb-btn" onclick="openAddWpModal()">➕ Ajouter point</button>
       <button class="tb-btn" onclick="startWpSelect()">📍 Points</button>
@@ -833,7 +838,8 @@ select.f-ctrl option{background:var(--bg3);}
       <button class="tb-btn" onclick="clearPolarOverlays()">🗑 Effacer</button>
       <input type="file" id="polar-zip-input" accept=".zip" style="display:none" onchange="onPolarZip(event)">
     </div>
-  </div>
+    </div><!-- end tb-rows-wrap -->
+  </div><!-- end #toolbar -->
 
   <!-- ══ VIEW: MAP ══ -->
   <div class="view active" id="view-map">
