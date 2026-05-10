@@ -762,6 +762,8 @@ select.f-ctrl option{background:var(--bg3);}
       <span class="nav-icon">📁</span><span>Import GPX / GeoJSON</span></div>
     <div class="nav-item" onclick="exportCurrentTrack()">
       <span class="nav-icon">💾</span><span>Exporter trace GPX</span></div>
+    <div class="nav-item" style="color:var(--accent)" onclick="showShareModal()">
+      <span class="nav-icon">📤</span><span>Partager la mission</span></div>
   </div>
 
   <div class="nav-sec">
@@ -1595,6 +1597,62 @@ select.f-ctrl option{background:var(--bg3);}
     <div class="btn-row">
       <button class="btn btn-o" onclick="gpxGrp.clearLayers();toast('Import effacé','ok')">🗑 Effacer</button>
       <button class="btn btn-s" onclick="hideModal('gpx-ov')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- PARTAGER MISSION -->
+<div class="modal-ov" id="share-ov">
+  <div class="modal-box" style="width:420px;max-width:95vw;max-height:88vh;overflow-y:auto;">
+    <div class="modal-title accent">📤 Partager la mission</div>
+
+    <!-- Stats -->
+    <div class="dl-info-box" id="share-stats">
+      <span id="share-stat-wps">— points</span> &nbsp;·&nbsp;
+      <span id="share-stat-trks">— traces</span> &nbsp;·&nbsp;
+      <span id="share-stat-zones">— zones</span>
+    </div>
+
+    <!-- Export -->
+    <div class="f-sec">
+      <div class="f-sec-title">Exporter un fichier .icewatch</div>
+      <div class="settings-row" style="padding:4px 0">
+        <span class="settings-lbl">Inclure les photos</span>
+        <label class="tog-wrap"><input type="checkbox" id="share-with-photos"><span class="tog-slider"></span></label>
+      </div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:8px">
+        ⚠️ Photos = fichier plus lourd (peut dépasser 10 Mo si nombreuses)
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-p" style="flex:1;min-height:46px" onclick="exportIcewatch()">📤 Exporter &amp; Partager</button>
+        <button class="btn btn-o" style="min-height:46px" onclick="exportIcewatchDownload()" title="Télécharger sans partager">⬇</button>
+      </div>
+      <div id="share-export-result" style="font-family:'Share Tech Mono',monospace;font-size:10px;margin-top:6px"></div>
+    </div>
+
+    <div class="sep"></div>
+
+    <!-- Import -->
+    <div class="f-sec">
+      <div class="f-sec-title">Importer un fichier .icewatch</div>
+      <div class="settings-row" style="padding:4px 0;margin-bottom:8px">
+        <span class="settings-lbl">Mode import</span>
+        <select id="share-import-mode" class="f-ctrl mono" style="width:auto;padding:4px 8px">
+          <option value="merge">Ajouter (fusionner)</option>
+          <option value="replace">Remplacer tout</option>
+        </select>
+      </div>
+      <div class="drop-zone" onclick="document.getElementById('share-file-input').click()">
+        <div class="dz-icon">📂</div>
+        <div class="dz-text">Toucher pour sélectionner</div>
+        <div class="dz-sub">Fichier .icewatch · .icewatch.json</div>
+        <input type="file" id="share-file-input" accept=".icewatch,.json,.icewatch.json" style="display:none" onchange="onIcewatchFile(event)">
+      </div>
+      <div id="share-import-result" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);margin-top:8px"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-s" onclick="hideModal('share-ov')">Fermer</button>
     </div>
   </div>
 </div>
@@ -2912,6 +2970,184 @@ function exportTrackGPXData(t){
   a.download=`ICEWATCH_${t.name.replace(/\W+/g,'_')}.gpx`;
   a.click();URL.revokeObjectURL(a.href);
   toast('✅ GPX exporté','ok');
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  PARTAGE MISSION                                         ║
+// ╚══════════════════════════════════════════════════════════╝
+async function showShareModal(){
+  // Mettre à jour stats
+  const wps=await dbAll('wp');
+  const trks=await dbAll('trk');
+  const zones=db.objectStoreNames.contains('zones')?await dbAll('zones'):[];
+  document.getElementById('share-stat-wps').textContent=wps.length+' points';
+  document.getElementById('share-stat-trks').textContent=trks.length+' traces';
+  document.getElementById('share-stat-zones').textContent=zones.length+' zones';
+  document.getElementById('share-export-result').textContent='';
+  document.getElementById('share-import-result').textContent='';
+  showModal('share-ov');
+}
+
+async function _buildIcewatchBundle(withPhotos){
+  const wps=await dbAll('wp');
+  const trks=await dbAll('trk');
+  const zones=db.objectStoreNames.contains('zones')?await dbAll('zones'):[];
+  const sketches=db.objectStoreNames.contains('sketches')?await dbAll('sketches'):[];
+  let photos=[];
+  if(withPhotos){
+    photos=await dbAll('ph');
+  }
+  return {
+    version:2,
+    app:'ICEWATCH',
+    exported:new Date().toISOString(),
+    wps,trks,zones,sketches,photos
+  };
+}
+
+function _triggerDownload(blob, filename){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+async function exportIcewatch(){
+  const res=document.getElementById('share-export-result');
+  res.style.color='var(--text3)';
+  res.textContent='⏳ Préparation…';
+  try{
+    const withPhotos=document.getElementById('share-with-photos').checked;
+    const bundle=await _buildIcewatchBundle(withPhotos);
+    const json=JSON.stringify(bundle);
+    const blob=new Blob([json],{type:'application/json'});
+    const fname=`ICEWATCH_mission_${new Date().toISOString().slice(0,10)}.icewatch`;
+    const file=new File([blob],fname,{type:'application/json'});
+    // Web Share API (mobile : ouvre WhatsApp, AirDrop, etc.)
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({
+        title:'Mission ICEWATCH '+new Date().toLocaleDateString('fr-FR'),
+        text:'Partage données mission repérage glace',
+        files:[file]
+      });
+      res.style.color='var(--green)';
+      res.textContent='✅ Partage effectué';
+    } else {
+      // Fallback : téléchargement
+      _triggerDownload(blob,fname);
+      res.style.color='var(--accent)';
+      res.textContent=`✅ ${bundle.wps.length} pts · ${bundle.trks.length} traces · fichier téléchargé`;
+    }
+  }catch(e){
+    if(e.name==='AbortError'){res.style.color='var(--text3)';res.textContent='Partage annulé';}
+    else{res.style.color='var(--danger)';res.textContent='❌ '+e.message;}
+  }
+}
+
+async function exportIcewatchDownload(){
+  const res=document.getElementById('share-export-result');
+  res.style.color='var(--text3)';res.textContent='⏳ Préparation…';
+  try{
+    const withPhotos=document.getElementById('share-with-photos').checked;
+    const bundle=await _buildIcewatchBundle(withPhotos);
+    const json=JSON.stringify(bundle);
+    const blob=new Blob([json],{type:'application/json'});
+    const fname=`ICEWATCH_mission_${new Date().toISOString().slice(0,10)}.icewatch`;
+    _triggerDownload(blob,fname);
+    const kb=Math.round(json.length/1024);
+    res.style.color='var(--accent)';
+    res.textContent=`✅ ${bundle.wps.length} pts · ${bundle.trks.length} traces · ${kb} Ko`;
+  }catch(e){res.style.color='var(--danger)';res.textContent='❌ '+e.message;}
+}
+
+function onIcewatchFile(evt){
+  const f=evt.target.files[0];evt.target.value='';
+  if(!f)return;
+  const res=document.getElementById('share-import-result');
+  res.style.color='var(--text3)';res.textContent='⏳ Lecture…';
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    try{
+      const bundle=JSON.parse(e.target.result);
+      await importIcewatchBundle(bundle);
+    }catch(err){
+      res.style.color='var(--danger)';
+      res.textContent='❌ Fichier invalide : '+err.message;
+    }
+  };
+  reader.readAsText(f);
+}
+
+async function importIcewatchBundle(bundle){
+  const res=document.getElementById('share-import-result');
+  const mode=document.getElementById('share-import-mode').value;
+  if(!bundle||!bundle.wps){
+    res.style.color='var(--danger)';res.textContent='❌ Format non reconnu';return;
+  }
+  try{
+    res.style.color='var(--text3)';res.textContent='⏳ Import en cours…';
+    // En mode "remplacer" : vider les stores d'abord
+    if(mode==='replace'){
+      await new Promise((ok,ko)=>{
+        const tx=db.transaction(['wp','ph','trk','zones','sketches'],'readwrite');
+        tx.objectStore('wp').clear();
+        tx.objectStore('ph').clear();
+        tx.objectStore('trk').clear();
+        if(db.objectStoreNames.contains('zones'))tx.objectStore('zones').clear();
+        if(db.objectStoreNames.contains('sketches'))tx.objectStore('sketches').clear();
+        tx.oncomplete=ok;tx.onerror=()=>ko(tx.error);
+      });
+      S.wps=[];S.trks=[];
+      wpGrp.clearLayers();trkGrp.clearLayers();
+      Object.keys(wpMarkers).forEach(k=>delete wpMarkers[k]);
+    }
+    // Importer waypoints
+    let wc=0,tc=0,zc=0,pc=0;
+    for(const wp of (bundle.wps||[])){
+      const existing=S.wps.find(w=>w.id===wp.id);
+      if(!existing){
+        await dbPut('wp',wp);
+        S.wps.push(wp);
+        addWpMarker(wp);
+        wc++;
+      }
+    }
+    // Importer traces
+    for(const trk of (bundle.trks||[])){
+      const existing=S.trks.find(t=>t.id===trk.id);
+      if(!existing){
+        await dbPut('trk',trk);
+        S.trks.push(trk);
+        if(typeof renderTrack==='function') renderTrack(trk);
+        tc++;
+      }
+    }
+    // Importer zones
+    if(db.objectStoreNames.contains('zones')){
+      for(const z of (bundle.zones||[])){
+        await dbPut('zones',z);zc++;
+      }
+      if(typeof loadZones==='function') loadZones();
+    }
+    // Importer photos
+    for(const ph of (bundle.photos||[])){
+      await dbPut('ph',ph);pc++;
+    }
+    // Mettre à jour compteurs UI
+    document.getElementById('sb-wps').textContent=S.wps.length;
+    document.getElementById('sb-trks').textContent=S.trks.length;
+    res.style.color='var(--green)';
+    res.textContent=`✅ ${wc} points · ${tc} traces · ${zc} zones · ${pc} photos`;
+    toast(`✅ Mission importée : ${wc}pts ${tc}traces`,'ok');
+    // Recentrer la carte si des points ont été importés
+    if(wc>0&&S.wps.length>0){
+      try{map.fitBounds(wpGrp.getBounds(),{padding:[30,30],maxZoom:10});}catch{}
+    }
+  }catch(e){
+    res.style.color='var(--danger)';
+    res.textContent='❌ Erreur : '+e.message;
+  }
 }
 
 // ╔══════════════════════════════════════════════════════════╗
