@@ -603,8 +603,9 @@ select.f-ctrl option{background:var(--bg3);}
   #layer-panel { left: 0; right: 0; transform: none; border-radius: 10px 10px 0 0; }
 }
 
-/* Hamburger masqué par défaut (desktop) */
+/* Hamburger masqué par défaut (desktop), visible si sidebar collapsed */
 #hamburger { display: none; }
+#app.sb-collapsed #hamburger { display: flex; }
 /* Zoom interface sur toolbar buttons */
 .tb-rows{zoom:var(--ui-zoom);}
 
@@ -778,7 +779,7 @@ select.f-ctrl option{background:var(--bg3);}
   <!-- TOOLBAR -->
   <div id="toolbar">
     <div class="tb-head">
-      <button id="hamburger" class="tb-btn" onclick="toggleSidebar()" style="flex-shrink:0;font-size:16px;min-width:40px;justify-content:center;">☰</button>
+      <button id="hamburger" class="tb-btn" onclick="_sbCollapsed?toggleSidebarCollapse():toggleSidebar()" style="flex-shrink:0;font-size:16px;min-width:40px;justify-content:center;">☰</button>
       <span class="tb-title" id="tb-title">CARTE MARITIME — REPÉRAGE GLACE</span>
       <button class="tb-btn" onclick="toggleTheme()">🌓</button>
     </div>
