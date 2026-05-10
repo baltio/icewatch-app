@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="night">
+<html lang="fr" data-theme="day">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1840,7 +1840,8 @@ function initMap(){
     if(c.sub) o.subdomains=c.sub;
     tileLayers[k]=new OffTL(c.url,o);
   });
-  switchLayer('dark');
+  const _savedLayer=localStorage.getItem('icewatch-layer')||'light';
+  switchLayer(_savedLayer);
   buildLayerGrid();
 
   zoneGrp=L.layerGroup().addTo(map);
@@ -1924,6 +1925,7 @@ function switchLayer(k){
   if(curTL) map.removeLayer(curTL);
   curTL=tileLayers[k]; curTL.addTo(map); curTL.bringToBack();
   S.layer=k;
+  localStorage.setItem('icewatch-layer',k);
   document.querySelectorAll('.layer-card').forEach(c=>c.classList.toggle('active',c.dataset.k===k));
   // Sync sur la carte glace si initialisée
   if(iceMap && tileLayers[k]){
@@ -4273,6 +4275,7 @@ function toggleFollowHelio(){
 function toggleTheme(){
   const t=document.documentElement.getAttribute('data-theme')==='night'?'day':'night';
   document.documentElement.setAttribute('data-theme',t);
+  localStorage.setItem('icewatch-theme',t);
   const lf=t==='night'?'brightness(.85) saturate(.8)':'none';
   document.getElementById('leaflet-map').style.setProperty('--leaflet-filter',lf);
 }
@@ -5397,6 +5400,10 @@ document.addEventListener('DOMContentLoaded',async()=>{
   // Restaurer zoom interface
   const savedZoom=parseFloat(localStorage.getItem('icewatch-ui-zoom'))||1;
   document.documentElement.style.setProperty('--ui-zoom',savedZoom);
+  // Restaurer thème (jour/nuit) — défaut : jour
+  const savedTheme=localStorage.getItem('icewatch-theme')||'day';
+  document.documentElement.setAttribute('data-theme',savedTheme);
+  if(savedTheme==='night') document.getElementById('leaflet-map')?.style.setProperty('--leaflet-filter','brightness(.85) saturate(.8)');
   // Restaurer état sidebar collapse
   if(localStorage.getItem('icewatch-sb-collapsed')==='1') toggleSidebarCollapse(true);
   // GPS : démarrage automatique
