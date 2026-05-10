@@ -1728,7 +1728,13 @@ const OffTL = L.TileLayer.extend({
 });
 
 function initMap(){
-  map=L.map('leaflet-map',{center:[76,15],zoom:5,zoomControl:false});
+  // Position initiale : dernière position connue ou défaut Arctique
+  let _initCenter=[76,15], _initZoom=5;
+  try{
+    const _sp=JSON.parse(localStorage.getItem('icewatch-map-pos')||'null');
+    if(_sp&&_sp.lat&&_sp.lng){_initCenter=[_sp.lat,_sp.lng];_initZoom=_sp.z||7;}
+  }catch(e){}
+  map=L.map('leaflet-map',{center:_initCenter,zoom:_initZoom,zoomControl:false});
   L.control.zoom({position:'topright'}).addTo(map);
   trackGrp=L.layerGroup().addTo(map);
   wpGrp=L.layerGroup().addTo(map);
@@ -1802,6 +1808,11 @@ function initMap(){
   _mc.addEventListener('touchstart',_sketchStart,{passive:false});
   _mc.addEventListener('touchmove',_sketchMove,{passive:false});
   _mc.addEventListener('touchend',_sketchEnd,{passive:false});
+  // Sauvegarder la position de la carte à chaque déplacement
+  map.on('moveend',()=>{
+    const c=map.getCenter();
+    localStorage.setItem('icewatch-map-pos',JSON.stringify({lat:+c.lat.toFixed(5),lng:+c.lng.toFixed(5),z:map.getZoom()}));
+  });
 }
 
 const ACCENT='#3dd4f0';
@@ -2029,10 +2040,15 @@ function startGPS(){
 
 function onPos(p){
   const{latitude:la,longitude:lo,altitude:al,speed:sp,heading:hd,accuracy:ac}=p.coords;
+  const _firstFix=!S.gps;
   S.gps={lat:la,lng:lo};S.alt=al;S.spd=sp;S.hdg=hd;S.acc=ac;
   updateUserMarker(la,lo,hd);
   updateHUD();
   if(S.rec) addTrackPoint(la,lo,al,sp,hd);
+  // Premier fix GPS : centrer la carte si aucune position sauvegardée
+  if(_firstFix&&!localStorage.getItem('icewatch-map-pos')){
+    map.setView([la,lo],Math.max(map.getZoom(),7));
+  }
 
   // Accuracy
   const dot=document.getElementById('acc-dot'),txt=document.getElementById('acc-txt');
