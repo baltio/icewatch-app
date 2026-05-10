@@ -603,9 +603,8 @@ select.f-ctrl option{background:var(--bg3);}
   #layer-panel { left: 0; right: 0; transform: none; border-radius: 10px 10px 0 0; }
 }
 
-/* Hamburger masqué par défaut (desktop), visible si sidebar collapsed */
-#hamburger { display: none; }
-#app.sb-collapsed #hamburger { display: flex; }
+/* Hamburger toujours visible */
+#hamburger { display: flex; }
 /* Zoom interface sur toolbar buttons */
 .tb-rows{zoom:var(--ui-zoom);}
 
@@ -796,18 +795,12 @@ select.f-ctrl option{background:var(--bg3);}
       <button class="tb-btn" onclick="toggleTheme()">🌓</button>
     </div>
     <div class="tb-rows" id="tb-map-rows">
-      <button class="tb-btn" onclick="toggleRecord()" id="tb-rec-btn">🔴 Démarrer trace</button>
-      <div class="tb-sep"></div>
       <button class="tb-btn" onclick="openAddWpModal()">➕ Ajouter point</button>
       <button class="tb-btn" onclick="startWpSelect()">📍 Points</button>
       <button class="tb-btn" onclick="showModal('tracks-ov')">📶 Traces</button>
       <div class="tb-sep"></div>
       <button class="tb-btn" onclick="showLayerPanel()">🗂 Couches</button>
-      <button class="tb-btn" onclick="showModal('dl-ov')">⬇ Hors-ligne</button>
-      <button class="tb-btn" onclick="showModal('gpx-ov')">📁 GPX/GeoJSON</button>
-      <button class="tb-btn" onclick="document.getElementById('map-zip-input').click()">📦 IcySea ZIP</button>
       <button class="tb-btn" onclick="exportCurrentTrack()">💾 Export GPX</button>
-      <div class="tb-sep"></div>
       <div class="tb-sep"></div>
       <button class="tb-btn ruler-btn" id="tb-ruler" onclick="toggleRuler()">📏 Règle</button>
       <button class="tb-btn zone-draw-btn" id="tb-zone-draw" onclick="toggleZoneDraw()">🗺 Zone</button>
@@ -1545,9 +1538,12 @@ select.f-ctrl option{background:var(--bg3);}
     </div>
     <div class="f-field">
       <label class="f-lbl">Zone de téléchargement</label>
-      <button class="draw-area-btn" id="draw-btn" onclick="toggleDraw()">🖱 Tracer la zone sur la carte</button>
-      <div id="area-info" style="margin-top:5px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">
-        Aucune zone définie — tracez un rectangle sur la carte puis revenez ici
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="btn btn-s" style="flex:1;min-width:120px" onclick="dlUseCurrentView()">🗺 Vue actuelle</button>
+        <button class="draw-area-btn" id="draw-btn" style="flex:1;min-width:120px" onclick="toggleDraw()">✏️ Tracer zone</button>
+      </div>
+      <div id="area-info" style="margin-top:2px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">
+        Aucune zone — utilisez «Vue actuelle» ou tracez un rectangle
       </div>
     </div>
     <div class="f-field">
@@ -2172,23 +2168,25 @@ async function toggleRecord(){
     document.getElementById('hud-status').className='hud-status rec';
     document.getElementById('btn-record').textContent='⏹';
     document.getElementById('btn-record').classList.add('rec');
-    document.getElementById('tb-rec-btn').textContent='⏹ Arrêter trace';
-    document.getElementById('tb-rec-btn').className='tb-btn rec';
+    const tbRec=document.getElementById('tb-rec-btn');
+    if(tbRec){tbRec.textContent='⏹ Arrêter trace';tbRec.className='tb-btn rec';}
     document.getElementById('gps-rec-badge').classList.add('show');
     document.getElementById('sb-rec-ico').textContent='⏹';
     document.getElementById('sb-rec-lbl').textContent='Arrêter trace';
+    localStorage.setItem('icewatch-was-recording',JSON.stringify({start:S.recStart,trkId:S.curTrkId,dist:0}));
     S.recTimer=setInterval(updateFlightTime,1000);
     toast('🔴 Enregistrement démarré','ok');
   }else{
     S.rec=false;
     clearInterval(S.recTimer);
+    localStorage.removeItem('icewatch-was-recording');
     document.getElementById('hud-dot').classList.add('off');
     document.getElementById('hud-status').textContent='STANDBY';
     document.getElementById('hud-status').className='hud-status standby';
     document.getElementById('btn-record').textContent='🚁';
     document.getElementById('btn-record').classList.remove('rec');
-    document.getElementById('tb-rec-btn').textContent='🔴 Démarrer trace';
-    document.getElementById('tb-rec-btn').className='tb-btn';
+    const tbRec2=document.getElementById('tb-rec-btn');
+    if(tbRec2){tbRec2.textContent='🔴 Démarrer trace';tbRec2.className='tb-btn';}
     document.getElementById('gps-rec-badge').classList.remove('show');
     document.getElementById('sb-rec-ico').textContent='🔴';
     document.getElementById('sb-rec-lbl').textContent='Démarrer trace';
@@ -2895,17 +2893,33 @@ function exportTrackGPXData(t){
 // ╔══════════════════════════════════════════════════════════╗
 // ║  TILE DOWNLOAD                                           ║
 // ╚══════════════════════════════════════════════════════════╝
+function dlUseCurrentView(){
+  S.dlBnds=map.getBounds();
+  // Régler les zooms automatiquement : zoom actuel -1 à +2 (plafonné 5-14)
+  const curZ=map.getZoom();
+  const zMin=Math.max(5,curZ-1);
+  const zMax=Math.min(14,curZ+2);
+  const zmEl=document.getElementById('zmin');
+  const zxEl=document.getElementById('zmax');
+  if(zmEl) zmEl.value=zMin;
+  if(zxEl) zxEl.value=zMax;
+  const sw=S.dlBnds.getSouthWest(),ne=S.dlBnds.getNorthEast();
+  document.getElementById('area-info').textContent=`Zone: ${sw.lat.toFixed(3)}°/${sw.lng.toFixed(3)}° → ${ne.lat.toFixed(3)}°/${ne.lng.toFixed(3)}°`;
+  updZoom();
+  toast('Zone = vue actuelle, zooms '+zMin+'→'+zMax,'ok');
+}
+
 function toggleDraw(){
   S.drawing=!S.drawing;
   const btn=document.getElementById('draw-btn');
   if(S.drawing){
     btn.classList.add('active');
-    btn.textContent='✋ Tracez un rectangle sur la carte…';
+    btn.textContent='✋ Tracez un rectangle…';
     hideModal('dl-ov');
     toast('Tracez un rectangle pour définir la zone de téléchargement');
   }else{
     btn.classList.remove('active');
-    btn.textContent='🖱 Tracer la zone sur la carte';
+    btn.textContent='✏️ Tracer zone';
   }
 }
 
@@ -2913,8 +2927,9 @@ function finishDraw(ll){
   if(!S.drawStart||!ll)return;
   S.dlBnds=L.latLngBounds(S.drawStart,ll);
   S.drawing=false;S.drawStart=null;
-  document.getElementById('draw-btn').classList.remove('active');
-  document.getElementById('draw-btn').textContent='🖱 Tracer la zone sur la carte';
+  const btn=document.getElementById('draw-btn');
+  btn.classList.remove('active');
+  btn.textContent='✏️ Tracer zone';
   const sw=S.dlBnds.getSouthWest(),ne=S.dlBnds.getNorthEast();
   document.getElementById('area-info').textContent=`Zone: ${sw.lat.toFixed(3)}°/${sw.lng.toFixed(3)}° → ${ne.lat.toFixed(3)}°/${ne.lng.toFixed(3)}°`;
   updZoom();showModal('dl-ov');
@@ -5026,6 +5041,19 @@ document.addEventListener('DOMContentLoaded',async()=>{
   // GPS : démarrage automatique
   startGPS();
   updateCacheInfo();
+
+  // Reprendre enregistrement si page rechargée (ex: photo tablette tue la page)
+  const _wasRec=localStorage.getItem('icewatch-was-recording');
+  if(_wasRec){
+    localStorage.removeItem('icewatch-was-recording');
+    toast('⚠️ Enregistrement interrompu (changement d\'app) — relancer depuis 🚁','warn');
+  }
+  // Sauvegarder état d'enregistrement lors de la mise en veille (ex: ouverture caméra)
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden&&S.rec){
+      localStorage.setItem('icewatch-was-recording',JSON.stringify({start:S.recStart,trkId:S.curTrkId}));
+    }
+  });
 
   // Charger zones annotées
   await loadZones();
