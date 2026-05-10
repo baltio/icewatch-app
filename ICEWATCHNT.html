@@ -240,8 +240,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 #btn-center{position:absolute;bottom:50px;left:14px;z-index:1400;
   width:40px;height:40px;border-radius:50%;border:1px solid var(--border);
   background:var(--logo-bg);color:var(--text2);font-size:16px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
+  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);transition:all .25s;}
 #btn-center:hover{border-color:var(--accent);color:var(--accent);}
+#btn-center.follow{border-color:var(--accent);color:var(--accent);background:rgba(61,212,240,.15);box-shadow:0 0 12px rgba(61,212,240,.4);animation:followPulse 2s ease-in-out infinite;}
+@keyframes followPulse{0%,100%{box-shadow:0 0 8px rgba(61,212,240,.3);}50%{box-shadow:0 0 18px rgba(61,212,240,.6);}}
 #btn-quickphoto{position:absolute;bottom:108px;right:14px;z-index:1400;
   width:52px;height:52px;border-radius:50%;border:1px solid var(--accent2);
   background:var(--logo-bg);color:var(--accent2);font-size:22px;cursor:pointer;
@@ -807,7 +809,7 @@ select.f-ctrl option{background:var(--bg3);}
       <button class="tb-btn sketch-btn" id="tb-sketch" onclick="toggleSketch()">✏️ Croquis</button>
       <button class="tb-btn pos-pick-btn" id="tb-pos-pick" onclick="togglePosPick()">🔍 Position</button>
       <button class="tb-btn range-ring-btn" id="tb-range-ring" onclick="toggleRangeRing()">⭕ 5 NM</button>
-      <button class="tb-btn" onclick="centerOnUser()">🎯 Centrer</button>
+      <button class="tb-btn" onclick="toggleFollowHelio()">🎯 Centrer</button>
     </div>
     <div class="tb-rows" id="tb-cockpit-rows" style="display:none">
       <button class="tb-btn" onclick="switchView('map')">← Retour carte</button>
@@ -997,7 +999,7 @@ select.f-ctrl option{background:var(--bg3);}
 
       <!-- Buttons -->
       <button id="btn-record" onclick="toggleRecord()" title="Démarrer / Arrêter l'enregistrement">🚁</button>
-      <button id="btn-center" onclick="centerOnUser()" title="Centrer sur position">🎯</button>
+      <button id="btn-center" onclick="toggleFollowHelio()" title="Suivre hélico / Centrer">🎯</button>
       <button id="btn-quickphoto" onclick="quickPhotoCapture()" title="Photo rapide — crée un waypoint automatique">📷</button>
       <input type="file" id="quickphoto-input" accept="image/*" capture="environment" style="display:none" onchange="onQuickPhoto(event)">
       <!-- Home bar retour navire -->
@@ -1832,6 +1834,14 @@ function initMap(){
     const c=map.getCenter();
     localStorage.setItem('icewatch-map-pos',JSON.stringify({lat:+c.lat.toFixed(5),lng:+c.lng.toFixed(5),z:map.getZoom()}));
   });
+  // Couper le suivi hélico si l'utilisateur fait glisser la carte manuellement
+  map.on('dragstart',()=>{
+    if(_followHelio){
+      _followHelio=false;
+      const btn=document.getElementById('btn-center');
+      if(btn){btn.classList.remove('follow');btn.title='Suivre hélico / Centrer';}
+    }
+  });
 }
 
 const ACCENT='#3dd4f0';
@@ -2068,6 +2078,8 @@ function onPos(p){
   if(_firstFix&&!localStorage.getItem('icewatch-map-pos')){
     map.setView([la,lo],Math.max(map.getZoom(),7));
   }
+  // Mode suivi hélico : recentrer la carte en permanence
+  if(_followHelio) map.panTo([la,lo],{animate:true,duration:0.5});
 
   // Accuracy
   const dot=document.getElementById('acc-dot'),txt=document.getElementById('acc-txt');
@@ -3979,6 +3991,22 @@ function closeSidebar(){
 
 function centerOnUser(){  if(S.gps) map.setView([S.gps.lat,S.gps.lng],map.getZoom());
   else toast('Position GPS non disponible','warn');
+}
+
+let _followHelio=false;
+function toggleFollowHelio(){
+  _followHelio=!_followHelio;
+  const btn=document.getElementById('btn-center');
+  if(_followHelio){
+    btn.classList.add('follow');
+    btn.title='Suivi hélico actif — touchez pour désactiver';
+    if(S.gps) map.setView([S.gps.lat,S.gps.lng],map.getZoom());
+    toast('🎯 Suivi hélico activé','ok');
+  }else{
+    btn.classList.remove('follow');
+    btn.title='Suivre hélico / Centrer';
+    toast('Suivi hélico désactivé');
+  }
 }
 
 function toggleTheme(){
