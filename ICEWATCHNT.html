@@ -46,7 +46,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 
 /* ── SIDEBAR ── */
 #sidebar{width:var(--sw);min-width:var(--sw);background:var(--bg2);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;z-index:100;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;z-index:100;overflow-x:hidden;overflow-y:auto;position:relative;
   transform-origin:left top;zoom:var(--ui-zoom);}
 /* Collapse sidebar (plein écran carte) */
 #app.sb-collapsed #sidebar{display:none;}
@@ -644,6 +644,8 @@ select.f-ctrl option{background:var(--bg3);}
 .sk-col-dot.active{border-color:white;box-shadow:0 0 6px rgba(255,255,255,.5);}
 /* ── FAUNA type color ── */
 .type-chip[data-t='bear'].active,.type-chip[data-t='whale'].active,.type-chip[data-t='seal'].active,.type-chip[data-t='penguin'].active,.type-chip[data-t='orca'].active{border-color:var(--green);color:var(--green);background:rgba(61,184,106,.1);}
+.type-chip[data-t='iceberg'].active{border-color:#7bd6f0;color:#7bd6f0;background:rgba(123,214,240,.1);}
+.type-chip[data-t='fastice'].active{border-color:#9dd4f8;color:#9dd4f8;background:rgba(157,212,248,.1);}
 /* ── ZONE DRAWING ── */
 #zone-draw-hint{position:absolute;top:50px;left:50%;transform:translateX(-50%);z-index:1600;background:rgba(5,13,24,.92);border:1px solid var(--accent2);border-radius:4px;padding:7px 16px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent2);pointer-events:none;display:none;}
 #wp-pick-hint,#wp-select-hint{position:absolute;top:50px;left:50%;transform:translateX(-50%);z-index:1600;background:rgba(5,13,24,.95);border:1px solid var(--accent);border-radius:4px;padding:7px 16px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent);display:none;gap:10px;align-items:center;pointer-events:all;}
@@ -1222,6 +1224,8 @@ select.f-ctrl option{background:var(--bg3);}
         <div class="type-chip" data-t="seal" onclick="selType('seal')">🦭 Phoque</div>
         <div class="type-chip" data-t="penguin" onclick="selType('penguin')">🐧 Manchot</div>
         <div class="type-chip" data-t="orca" onclick="selType('orca')">🐬 Orque</div>
+        <div class="type-chip" data-t="iceberg" onclick="selType('iceberg')">🧊 Iceberg</div>
+        <div class="type-chip" data-t="fastice" onclick="selType('fastice')">❄️ Fast Ice</div>
       </div>
     </div>
     <div class="f-field">
@@ -1732,6 +1736,8 @@ const WP_CFGS = {
   seal:     {e:'🦭',c:'#3db86a'},
   penguin:  {e:'🐧',c:'#3db86a'},
   orca:     {e:'🐬',c:'#3db86a'},
+  iceberg:  {e:'🧊',c:'#7bd6f0'},
+  fastice:  {e:'❄️',c:'#9dd4f8'},
 };
 
 function altColor(a){
