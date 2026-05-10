@@ -627,7 +627,22 @@ select.f-ctrl option{background:var(--bg3);}
 .type-chip[data-t='bear'].active,.type-chip[data-t='whale'].active,.type-chip[data-t='seal'].active,.type-chip[data-t='penguin'].active,.type-chip[data-t='orca'].active{border-color:var(--green);color:var(--green);background:rgba(61,184,106,.1);}
 /* ── ZONE DRAWING ── */
 #zone-draw-hint{position:absolute;top:50px;left:50%;transform:translateX(-50%);z-index:1600;background:rgba(5,13,24,.92);border:1px solid var(--accent2);border-radius:4px;padding:7px 16px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent2);pointer-events:none;display:none;}
+#wp-pick-hint,#wp-select-hint{position:absolute;top:50px;left:50%;transform:translateX(-50%);z-index:1600;background:rgba(5,13,24,.95);border:1px solid var(--accent);border-radius:4px;padding:7px 16px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent);display:none;gap:10px;align-items:center;pointer-events:all;}
+.wp-pos-mode-btn{flex:1;padding:6px 4px;font-family:'Share Tech Mono',monospace;font-size:9px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;transition:all .2s;}
+.wp-pos-mode-btn.active{background:rgba(61,212,240,.12);border-color:var(--accent);color:var(--accent);}
+#wp-pos-display{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--accent3);background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:7px 8px;text-align:center;margin:6px 0;letter-spacing:.5px;}
 .zone-draw-btn.active{background:rgba(200,148,30,.12)!important;border-color:var(--accent2)!important;color:var(--accent2)!important;}
+/* ── POSITION PICKER ── */
+.pos-pick-btn.active{background:rgba(61,212,240,.12)!important;border-color:var(--accent)!important;color:var(--accent)!important;}
+.range-ring-btn.active{background:rgba(61,212,240,.12)!important;border-color:var(--accent)!important;color:var(--accent)!important;}
+.leaflet-tooltip.range-ring-tip{background:transparent;border:none;box-shadow:none;color:#3dd4f0;font-family:'Share Tech Mono',monospace;font-size:9px;padding:0;white-space:nowrap;pointer-events:none;}
+.doc-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:12px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);margin:2px;}
+.doc-chip button{background:none;border:none;color:var(--danger);cursor:pointer;font-size:10px;padding:0 0 0 3px;line-height:1;}
+#pos-pick-hint{position:absolute;top:50px;left:50%;transform:translateX(-50%);z-index:1600;background:rgba(5,13,24,.95);border:1px solid var(--accent);border-radius:4px;padding:6px 14px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent);display:none;gap:10px;align-items:center;pointer-events:all;white-space:nowrap;}
+#pos-pick-panel{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);z-index:1600;background:rgba(5,13,24,.97);border:1px solid var(--accent);border-radius:6px;padding:12px 16px;display:none;min-width:280px;max-width:340px;font-family:'Share Tech Mono',monospace;box-shadow:0 4px 24px rgba(0,0,0,.7);}
+#pos-pick-panel .pp-coords{font-size:13px;color:var(--accent3);letter-spacing:.5px;margin-bottom:6px;text-align:center;}
+#pos-pick-panel .pp-dist{font-size:10px;color:var(--text2);text-align:center;margin-bottom:10px;}
+#pos-pick-panel .pp-btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
 /* ── CHECKLIST ── */
 .cl-tabs{display:flex;margin-bottom:12px;}
 .cl-tab-btn{font-family:'Share Tech Mono',monospace;font-size:10px;padding:6px 16px;border:1px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;flex:1;text-align:center;transition:all .15s;}
@@ -756,7 +771,7 @@ select.f-ctrl option{background:var(--bg3);}
       <button class="tb-btn" onclick="toggleRecord()" id="tb-rec-btn">🔴 Démarrer trace</button>
       <div class="tb-sep"></div>
       <button class="tb-btn" onclick="openAddWpModal()">➕ Ajouter point</button>
-      <button class="tb-btn" onclick="showModal('wps-ov')">📍 Points</button>
+      <button class="tb-btn" onclick="startWpSelect()">📍 Points</button>
       <button class="tb-btn" onclick="showModal('tracks-ov')">📶 Traces</button>
       <div class="tb-sep"></div>
       <button class="tb-btn" onclick="showLayerPanel()">🗂 Couches</button>
@@ -769,6 +784,8 @@ select.f-ctrl option{background:var(--bg3);}
       <button class="tb-btn ruler-btn" id="tb-ruler" onclick="toggleRuler()">📏 Règle</button>
       <button class="tb-btn zone-draw-btn" id="tb-zone-draw" onclick="toggleZoneDraw()">🗺 Zone</button>
       <button class="tb-btn sketch-btn" id="tb-sketch" onclick="toggleSketch()">✏️ Croquis</button>
+      <button class="tb-btn pos-pick-btn" id="tb-pos-pick" onclick="togglePosPick()">🔍 Position</button>
+      <button class="tb-btn range-ring-btn" id="tb-range-ring" onclick="toggleRangeRing()">⭕ 5 NM</button>
       <button class="tb-btn" onclick="centerOnUser()">🎯 Centrer</button>
     </div>
     <div class="tb-rows" id="tb-cockpit-rows" style="display:none">
@@ -873,6 +890,9 @@ select.f-ctrl option{background:var(--bg3);}
           <div class="ov-chip" id="ov-icysea-zip" onclick="document.getElementById('map-zip-input').click()">
             <span class="ov-dot"></span>📦 IcySea ZIP
           </div>
+          <div class="ov-chip" id="ov-sentinel" onclick="toggleSentinelOverlay()">
+            <span class="ov-dot"></span>🛰 Sentinel-2
+          </div>
         </div>
         <input type="file" id="map-zip-input" accept=".zip" style="display:none" onchange="onMapZip(event)">
         <div id="map-zip-bar" style="display:none;margin-top:8px;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -895,7 +915,48 @@ select.f-ctrl option{background:var(--bg3);}
           <button onclick="applyIceDate()" style="padding:4px 8px;border:1px solid var(--accent3);border-radius:3px;background:rgba(91,158,232,.1);color:var(--accent3);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;">OK</button>
           <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);">Source: NASA GIBS (AMSR2)</span>
         </div>
-      </div>
+
+        <!-- Sentinel-2 overlay panel -->
+        <div id="sentinel-bar" style="display:none;margin-top:10px;padding:10px;background:rgba(9,21,37,.7);border:1px solid rgba(61,212,240,.18);border-radius:5px;gap:0">
+          <div style="font-family:'Teko',sans-serif;font-size:12px;letter-spacing:1.5px;color:var(--accent);margin-bottom:8px">🛰 SENTINEL-2 · COPERNICUS</div>
+          <!-- Instance ID -->
+          <div style="margin-bottom:7px">
+            <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:3px">INSTANCE ID <a href="https://shapps.dataspace.copernicus.eu/dashboard/#/" target="_blank" style="color:var(--accent3);text-decoration:none">(obtenir gratuit ↗)</a></div>
+            <div style="display:flex;gap:4px">
+              <input id="sh-instance-id" type="text" placeholder="ex: 9d5592a3-..." style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 7px;outline:none" oninput="saveSentinelSettings()"/>
+            </div>
+          </div>
+          <!-- Date -->
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px;flex-wrap:wrap">
+            <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">DATE :</span>
+            <input id="sh-date" type="date" style="background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 7px;outline:none" oninput="saveSentinelSettings()"/>
+          </div>
+          <!-- Layer + Cloud -->
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px;flex-wrap:wrap">
+            <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">COUCHE :</span>
+            <select id="sh-layer" style="background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:3px 6px;outline:none" onchange="saveSentinelSettings()">
+              <option value="TRUE_COLOR">Vraies couleurs</option>
+              <option value="FALSE_COLOR">Fausses couleurs (IR)</option>
+              <option value="NDSI">NDSI (neige/glace)</option>
+              <option value="NDVI">NDVI (végétation)</option>
+            </select>
+            <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">NUAGES ≤</span>
+            <input id="sh-maxcc" type="number" min="0" max="100" value="30" style="width:48px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:3px 5px;outline:none" oninput="saveSentinelSettings()"/>
+            <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">%</span>
+          </div>
+          <!-- Opacity -->
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+            <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">OPACITÉ :</span>
+            <input type="range" id="sh-opacity" min="10" max="100" value="85" style="flex:1;accent-color:var(--accent3)" oninput="updateSentinelOpacity(this.value)"/>
+            <span id="sh-opacity-lbl" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent3);min-width:30px">85%</span>
+          </div>
+          <!-- Actions -->
+          <div style="display:flex;gap:6px">
+            <button onclick="applySentinelLayer()" style="flex:1;padding:6px;background:rgba(61,212,240,.1);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer">▶ Appliquer</button>
+            <button onclick="clearSentinelLayer()" style="padding:6px 10px;background:rgba(216,64,64,.08);border:1px solid var(--danger);border-radius:4px;color:var(--danger);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer">✕</button>
+          </div>
+          <div id="sh-status" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-top:6px;text-align:center"></div>
+        </div>
 
       <!-- GPS live bar -->
       <div id="gps-live-bar" class="gps-off">
@@ -930,6 +991,31 @@ select.f-ctrl option{background:var(--bg3);}
       </div>
       <!-- Zone drawing hint -->
       <div id="zone-draw-hint">📐 Cliquez pour placer les sommets · Double-clic pour fermer</div>
+      <!-- WP map pick hint -->
+      <div id="wp-pick-hint">
+        🎯 Touchez / cliquez sur la carte pour placer le point
+        <button onclick="cancelMapPick()" style="padding:2px 8px;font-size:9px;border:1px solid var(--danger);border-radius:3px;background:rgba(216,64,64,.15);color:var(--danger);cursor:pointer;font-family:'Share Tech Mono',monospace">✕ Annuler</button>
+      </div>
+      <!-- WP select from map hint -->
+      <div id="wp-select-hint">
+        📍 Touchez un point sur la carte pour voir ses informations
+        <button onclick="cancelWpSelect();showModal('wps-ov')" style="padding:2px 8px;font-size:9px;border:1px solid var(--accent3);border-radius:3px;background:rgba(91,158,232,.12);color:var(--accent3);cursor:pointer;font-family:'Share Tech Mono',monospace">📋 Liste</button>
+        <button onclick="cancelWpSelect()" style="padding:2px 8px;font-size:9px;border:1px solid var(--danger);border-radius:3px;background:rgba(216,64,64,.15);color:var(--danger);cursor:pointer;font-family:'Share Tech Mono',monospace">✕ Annuler</button>
+      </div>
+      <!-- Position picker hint + panel -->
+      <div id="pos-pick-hint">🔍 Touchez la carte pour identifier une position
+        <button onclick="cancelPosPick()" style="padding:2px 8px;font-size:9px;border:1px solid var(--danger);border-radius:3px;background:rgba(216,64,64,.15);color:var(--danger);cursor:pointer;font-family:'Share Tech Mono',monospace">✕ Fin</button>
+      </div>
+      <div id="pos-pick-panel">
+        <div class="pp-coords" id="pp-coords">—</div>
+        <div class="pp-dist" id="pp-dist"></div>
+        <div class="pp-btns">
+          <button onclick="ppCopyCoords()" style="padding:5px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">📋 Copier</button>
+          <button onclick="ppShareCoords()" style="padding:5px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">🔗 Partager</button>
+          <button onclick="ppCreateWp()" style="padding:5px 10px;background:rgba(61,212,240,.08);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">➕ Créer point</button>
+          <button onclick="cancelPosPick()" style="padding:5px 10px;background:transparent;border:1px solid var(--danger);border-radius:4px;color:var(--danger);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">✕ Fermer</button>
+        </div>
+      </div>
       <div id="sketch-hint">
         ✏️ Maintenez enfoncé et glissez pour dessiner
         <span style="color:var(--text3);margin-left:4px">Couleur:</span>
@@ -938,7 +1024,8 @@ select.f-ctrl option{background:var(--bg3);}
         <span class="sk-col-dot" data-c="#d84040" style="background:#d84040" title="Danger/Iceberg" onclick="setSketchColor('#d84040')"></span>
         <span class="sk-col-dot" data-c="#c8941e" style="background:#c8941e" title="Glace dense" onclick="setSketchColor('#c8941e')"></span>
         <span class="sk-col-dot" data-c="#3db86a" style="background:#3db86a" title="Zone libre" onclick="setSketchColor('#3db86a')"></span>
-        <button onclick="toggleSketch()" style="margin-left:6px;padding:2px 8px;font-size:9px;border:1px solid var(--green);border-radius:3px;background:transparent;color:var(--green);cursor:pointer;font-family:'Share Tech Mono',monospace">✕ Fin</button>
+        <button onclick="clearAllSketches()" style="margin-left:4px;padding:2px 8px;font-size:9px;border:1px solid var(--danger);border-radius:3px;background:rgba(216,64,64,.1);color:var(--danger);cursor:pointer;font-family:'Share Tech Mono',monospace" title="Effacer tous les croquis">🗑 Tout effacer</button>
+        <button onclick="toggleSketch()" style="margin-left:2px;padding:2px 8px;font-size:9px;border:1px solid var(--green);border-radius:3px;background:transparent;color:var(--green);cursor:pointer;font-family:'Share Tech Mono',monospace">✕ Fin</button>
       </div>
     </div>
   </div>
@@ -1103,26 +1190,51 @@ select.f-ctrl option{background:var(--bg3);}
     </div>
     <div class="f-sec">
       <div class="f-sec-title">Position</div>
-      <div class="f-row">
-        <div class="f-field">
-          <label class="f-lbl">Latitude</label>
-          <input class="f-ctrl mono" type="number" id="wp-lat" placeholder="76.000000" step="0.000001">
-        </div>
-        <div class="f-field">
-          <label class="f-lbl">Longitude</label>
-          <input class="f-ctrl mono" type="number" id="wp-lon" placeholder="10.000000" step="0.000001">
-        </div>
+      <!-- Mode selector -->
+      <div style="display:flex;gap:4px;margin-bottom:6px">
+        <button class="wp-pos-mode-btn active" data-m="gps" onclick="setWpPosMode('gps')">🚁 GPS</button>
+        <button class="wp-pos-mode-btn" data-m="map" onclick="setWpPosMode('map')">🗺 Carte</button>
+        <button class="wp-pos-mode-btn" data-m="coord" onclick="setWpPosMode('coord')">⌨️ Coords</button>
       </div>
-      <button class="btn btn-s" style="width:100%;margin-top:2px" onclick="useGPS()">📍 Utiliser ma position GPS actuelle</button>
+      <!-- Position display -->
+      <div id="wp-pos-display">— Position non définie —</div>
+      <!-- GPS mode -->
+      <div id="wp-pos-gps">
+        <button class="btn btn-s" style="width:100%" onclick="useGPS()">📍 Prendre position GPS hélico</button>
+      </div>
+      <!-- Map mode -->
+      <div id="wp-pos-map" style="display:none">
+        <button class="btn btn-s" style="width:100%" onclick="startMapPick()">🗺 Toucher la carte pour placer le point</button>
+      </div>
+      <!-- Coord mode -->
+      <div id="wp-pos-coord" style="display:none">
+        <div class="f-row">
+          <div class="f-field">
+            <label class="f-lbl">Latitude</label>
+            <input class="f-ctrl mono" type="text" id="wp-coord-lat" placeholder="76°30,500' N" oninput="updateWpFromCoords()">
+          </div>
+          <div class="f-field">
+            <label class="f-lbl">Longitude</label>
+            <input class="f-ctrl mono" type="text" id="wp-coord-lon" placeholder="018°15,200' W" oninput="updateWpFromCoords()">
+          </div>
+        </div>
+        <div id="wp-coord-status" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-top:3px"></div>
+      </div>
+      <!-- Hidden storage -->
+      <input type="hidden" id="wp-lat">
+      <input type="hidden" id="wp-lon">
     </div>
     <div class="f-field">
       <label class="f-lbl">Photos (glace, conditions)</label>
       <div class="photo-grid-add" id="ph-grid">
         <button class="ph-add-btn" title="Prendre une photo" onclick="document.getElementById('ph-cam-input').click()">📷</button>
         <button class="ph-add-btn" title="Choisir dans la galerie" onclick="document.getElementById('ph-gal-input').click()">🖼</button>
+        <button class="ph-add-btn" title="Joindre fichier (vidéo, PDF…)" onclick="document.getElementById('doc-input').click()">📎</button>
       </div>
+      <div id="doc-list" style="margin-top:4px"></div>
       <input type="file" id="ph-cam-input" accept="image/*" capture="environment" style="display:none" onchange="onPhotoInput(event)">
       <input type="file" id="ph-gal-input" accept="image/*" multiple style="display:none" onchange="onPhotoInput(event)">
+      <input type="file" id="doc-input" accept="video/*,audio/*,.pdf,.txt,.gpx,.kml,.geojson" multiple style="display:none" onchange="onDocInput(event)">
     </div>
     <!-- Données glace -->
     <div class="f-field">
@@ -1318,6 +1430,7 @@ select.f-ctrl option{background:var(--bg3);}
       <button class="btn btn-s" onclick="downloadReport()">⬇ .txt</button>
       <button class="btn btn-s" onclick="downloadReportHTML()">🌐 .html</button>
       <button class="btn btn-s" onclick="exportPOIsGeoJSON()">📤 GeoJSON</button>
+      <button class="btn btn-p" onclick="shareReport()">🔗 Partager</button>
       <button class="btn btn-p" onclick="exportMissionZIP()">📦 Export complet</button>
       <button class="btn btn-s" onclick="hideModal('report-ov')">Fermer</button>
     </div>
@@ -1473,6 +1586,17 @@ const LAYERS_CFG = {
   sat:    { n:'Satellite', e:'🛰',  sub:'',     url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr:'© Esri', max:18, prev:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/5/8' },
 };
 
+const WP_CFGS = {
+  departure:{e:'🚁',c:'#5b9ee8'},
+  ship:     {e:'⚓',c:'#c8941e'},
+  note:     {e:'📍',c:'#d47828'},
+  bear:     {e:'🐻‍❄️',c:'#3db86a'},
+  whale:    {e:'🐋',c:'#3db86a'},
+  seal:     {e:'🦭',c:'#3db86a'},
+  penguin:  {e:'🐧',c:'#3db86a'},
+  orca:     {e:'🐬',c:'#3db86a'},
+};
+
 function altColor(a){
   if(a===null||a===undefined||isNaN(a)) return '#3dd4f0';
   if(a<50)  return '#3db86a';
@@ -1503,7 +1627,7 @@ const S = {
 let db;
 async function openDB(){
   return new Promise((res,rej)=>{
-    const r=indexedDB.open('icewatch_db',4);
+    const r=indexedDB.open('icewatch_db',5);
     r.onupgradeneeded=e=>{
       const d=e.target.result;
       if(!d.objectStoreNames.contains('wp'))  d.createObjectStore('wp',{keyPath:'id'});
@@ -1515,6 +1639,9 @@ async function openDB(){
       }
       if(e.oldVersion < 4){
         if(!d.objectStoreNames.contains('sketches')) d.createObjectStore('sketches',{keyPath:'id'});
+      }
+      if(e.oldVersion < 5){
+        if(!d.objectStoreNames.contains('docs')){ const sd=d.createObjectStore('docs',{keyPath:'id'}); sd.createIndex('wpId','wpId',{unique:false}); }
       }
     };
     r.onsuccess=e=>res(e.target.result);
@@ -1569,11 +1696,14 @@ function initMap(){
   zoneGrp=L.layerGroup().addTo(map);
   // Long-press to add waypoint
   let pt=null,moved=false;
-  map.on('mousedown touchstart',e=>{moved=false;pt=setTimeout(()=>{if(!moved&&!S.drawing&&!_rulerActive&&!_drawingZone&&!_sketchActive)openAddWpAt(e.latlng||map.getCenter());},800);});
+  map.on('mousedown touchstart',e=>{moved=false;pt=setTimeout(()=>{if(!moved&&!S.drawing&&!_rulerActive&&!_drawingZone&&!_sketchActive&&!_wpSelectMode&&!_posPickActive)openAddWpAt(e.latlng||map.getCenter());},800);});
   map.on('mousemove touchmove',()=>{moved=true;if(pt){clearTimeout(pt);pt=null;}});
   map.on('mouseup touchend',()=>{if(pt){clearTimeout(pt);pt=null;}});
   // Ruler and zone drawing
   map.on('click',e=>{
+    if(_wpPickMode){_onMapPickClick(e.latlng);return;}
+    if(_wpSelectMode){cancelWpSelect();return;}
+    if(_posPickActive){_onPosPickClick(e.latlng);return;}
     if(_rulerActive){_onRulerClick(e);}
     else if(_drawingZone){_onZoneClick(e);}
   });
@@ -1788,6 +1918,48 @@ function updateUserMarker(lat,lon,hdg){
     hdgLine=L.polyline([[lat,lon],[lat+d*Math.cos(r),lon+d*Math.sin(r)/Math.cos(lat*Math.PI/180)]],
       {color:ACCENT,weight:3,opacity:.65}).addTo(map);
   }
+  // Mettre à jour le cercle de portée si actif
+  if(_rangeRingActive) _updateRangeRing(lat,lon);
+}
+
+// ── Cercle de portée 5 NM ──────────────────────────────────
+let _rangeRingActive=false, _rangeRing=null, _rangeRingNM=5;
+
+function toggleRangeRing(){
+  _rangeRingActive=!_rangeRingActive;
+  const btn=document.getElementById('tb-range-ring');
+  btn.classList.toggle('active',_rangeRingActive);
+  if(_rangeRingActive){
+    const pos=S.gps||{lat:map.getCenter().lat,lng:map.getCenter().lng};
+    _updateRangeRing(pos.lat,pos.lng);
+    toast(`⊙ Cercle ${_rangeRingNM} NM activé`,'ok');
+  } else {
+    if(_rangeRing){map.removeLayer(_rangeRing);_rangeRing=null;}
+    toast('Cercle désactivé','ok');
+  }
+}
+
+function _updateRangeRing(lat,lng){
+  const radiusM=_rangeRingNM*1852;
+  if(!_rangeRing){
+    _rangeRing=L.circle([lat,lng],{
+      radius:radiusM,
+      color:'#3dd4f0',
+      weight:1.5,
+      opacity:.7,
+      fillColor:'#3dd4f0',
+      fillOpacity:.04,
+      dashArray:'6 4',
+      interactive:false,
+    }).addTo(map);
+    // Label distance
+    _rangeRing.bindTooltip(`${_rangeRingNM} NM`,{
+      permanent:true, direction:'right', offset:[0,0],
+      className:'range-ring-tip',
+    });
+  } else {
+    _rangeRing.setLatLng([lat,lng]);
+  }
 }
 
 // ╔══════════════════════════════════════════════════════════╗
@@ -1965,18 +2137,30 @@ function updateFlightTime(){
 // ║  WAYPOINTS                                               ║
 // ╚══════════════════════════════════════════════════════════╝
 function openAddWpAt(ll){
-  S.editWpId=null;S.pendPh=[];
+  S.editWpId=null;S.pendPh=[];S.pendDocs=[];
+  renderPendingDocs();
   document.getElementById('wp-modal-title').textContent='📍 Nouveau Point d\'Intérêt';
-  // Horodatage auto
   const opts=_loadSettingsOpts();
   const autoName=opts.autoTimestamp?new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' ':'';
   document.getElementById('wp-name').value=autoName;
   document.getElementById('wp-comment').value='';
-  document.getElementById('wp-lat').value=ll.lat.toFixed(6);
-  document.getElementById('wp-lon').value=ll.lng.toFixed(6);
   document.getElementById('btn-wp-del').style.display='none';
   selType('note');renderPendingPhotos();
   resetIceForm();resetVoiceForm();
+  // Init position UI
+  // Réinitialise les panels sans appeler useGPS (évite le toast)
+  document.querySelectorAll('.wp-pos-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.m==='gps'));
+  document.getElementById('wp-pos-gps').style.display='block';
+  document.getElementById('wp-pos-map').style.display='none';
+  document.getElementById('wp-pos-coord').style.display='none';
+  if(ll){
+    _setWpLatLng(ll.lat,ll.lng);
+  } else {
+    document.getElementById('wp-lat').value='';
+    document.getElementById('wp-lon').value='';
+    const disp=document.getElementById('wp-pos-display');
+    if(disp) disp.textContent='— Position non définie —';
+  }
   showModal('wp-ov');
 }
 
@@ -1990,10 +2174,206 @@ function selType(t){
   document.querySelectorAll('.type-chip').forEach(b=>b.classList.toggle('active',b.dataset.t===t));
 }
 
+// ── Sélection de waypoint sur la carte ────────────────────
+let _wpSelectMode=false;
+
+function startWpSelect(){
+  if(!S.wps.length){showModal('wps-ov');return;}
+  _wpSelectMode=true;
+  const hint=document.getElementById('wp-select-hint');
+  if(hint) hint.style.display='flex';
+  if(map) map.getContainer().style.cursor='pointer';
+}
+
+function cancelWpSelect(){
+  _wpSelectMode=false;
+  const hint=document.getElementById('wp-select-hint');
+  if(hint) hint.style.display='none';
+  if(map) map.getContainer().style.cursor='';
+}
+
+// ── Position Picker ────────────────────────────────────────
+let _posPickActive=false,_posPickMarker=null,_posPickLL=null;
+
+function togglePosPick(){
+  _posPickActive?cancelPosPick():startPosPick();
+}
+
+function startPosPick(){
+  _posPickActive=true;
+  document.getElementById('tb-pos-pick').classList.add('active');
+  document.getElementById('pos-pick-hint').style.display='flex';
+  document.getElementById('pos-pick-panel').style.display='none';
+  if(map) map.getContainer().style.cursor='crosshair';
+}
+
+function cancelPosPick(){
+  _posPickActive=false;
+  document.getElementById('tb-pos-pick').classList.remove('active');
+  document.getElementById('pos-pick-hint').style.display='none';
+  document.getElementById('pos-pick-panel').style.display='none';
+  if(map) map.getContainer().style.cursor='';
+  if(_posPickMarker){map.removeLayer(_posPickMarker);_posPickMarker=null;}
+  _posPickLL=null;
+}
+
+function _onPosPickClick(latlng){
+  _posPickLL=latlng;
+  // Pose le marqueur croix
+  if(_posPickMarker) map.removeLayer(_posPickMarker);
+  _posPickMarker=L.marker(latlng,{
+    icon:L.divIcon({
+      html:`<div style="width:24px;height:24px;position:relative">
+        <div style="position:absolute;top:11px;left:0;width:24px;height:2px;background:#3dd4f0"></div>
+        <div style="position:absolute;left:11px;top:0;width:2px;height:24px;background:#3dd4f0"></div>
+        <div style="position:absolute;top:7px;left:7px;width:10px;height:10px;border-radius:50%;border:2px solid #3dd4f0;background:rgba(61,212,240,.25)"></div>
+      </div>`,
+      className:'',iconSize:[24,24],iconAnchor:[12,12]
+    }),
+    zIndexOffset:1000,
+    interactive:false
+  }).addTo(map);
+  // Affiche les coords
+  const latStr=fmtDM(latlng.lat,'lat');
+  const lonStr=fmtDM(latlng.lng,'lon');
+  document.getElementById('pp-coords').textContent=`${latStr}   ${lonStr}`;
+  // Distance/cap depuis position hélico
+  const distEl=document.getElementById('pp-dist');
+  if(S.gps){
+    const from=L.latLng(S.gps.lat,S.gps.lng);
+    const distM=from.distanceTo(latlng);
+    const distNM=(distM/1852).toFixed(2);
+    const dLat=(latlng.lat-S.gps.lat)*Math.PI/180;
+    const dLng=(latlng.lng-S.gps.lng)*Math.PI/180;
+    const lat1=S.gps.lat*Math.PI/180;
+    const a=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(latlng.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+    const brg=(Math.atan2(Math.sin(dLng)*Math.cos(latlng.lat*Math.PI/180),Math.cos(lat1)*Math.sin(latlng.lat*Math.PI/180)-Math.sin(lat1)*Math.cos(latlng.lat*Math.PI/180)*Math.cos(dLng))*180/Math.PI+360)%360;
+    distEl.textContent=`📏 ${distNM} NM  |  🧭 ${Math.round(brg)}°T depuis hélico`;
+  } else {
+    distEl.textContent='GPS hélico non disponible';
+  }
+  document.getElementById('pos-pick-hint').style.display='none';
+  document.getElementById('pos-pick-panel').style.display='block';
+}
+
+function ppCopyCoords(){
+  if(!_posPickLL) return;
+  const txt=`${fmtDM(_posPickLL.lat,'lat')}  ${fmtDM(_posPickLL.lng,'lon')}`;
+  navigator.clipboard.writeText(txt).then(()=>toast('📋 Coords copiées','ok')).catch(()=>toast('Erreur copie','err'));
+}
+
+async function ppShareCoords(){
+  if(!_posPickLL) return;
+  const lat=fmtDM(_posPickLL.lat,'lat');
+  const lon=fmtDM(_posPickLL.lng,'lon');
+  const txt=`📍 Position identifiée\n${lat}  ${lon}\n\nvia IceWatch`;
+  if(navigator.share){
+    try{await navigator.share({title:'Position IceWatch',text:txt});return;}
+    catch(e){if(e.name==='AbortError')return;}
+  }
+  const enc=encodeURIComponent(txt);
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(5,13,24,.85);display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML=`<div style="background:#091525;border:1px solid #1a3050;border-radius:8px;padding:20px 28px;min-width:240px;text-align:center">
+    <div style="font-family:'Teko',sans-serif;font-size:16px;color:#3dd4f0;margin-bottom:14px">🔗 Partager la position</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:#5b9ee8;margin-bottom:14px">${lat}<br>${lon}</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <a href="https://wa.me/?text=${enc}" target="_blank" style="display:block;padding:9px;background:rgba(37,211,102,.08);border:1px solid #25d366;border-radius:5px;color:#25d366;font-family:'Share Tech Mono',monospace;font-size:11px;text-decoration:none">💬 WhatsApp</a>
+      <a href="mailto:?subject=Position%20IceWatch&body=${enc}" style="display:block;padding:9px;background:rgba(91,158,232,.08);border:1px solid #5b9ee8;border-radius:5px;color:#8fb2d0;font-family:'Share Tech Mono',monospace;font-size:11px;text-decoration:none">📧 E-mail</a>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:7px;background:transparent;border:1px solid #d84040;border-radius:5px;color:#d84040;font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;margin-top:4px">✕ Fermer</button>
+    </div></div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+}
+
+function ppCreateWp(){
+  if(!_posPickLL) return;
+  cancelPosPick();
+  openAddWpAt(_posPickLL);
+}
+
+function _setWpLatLng(lat,lng){
+  document.getElementById('wp-lat').value=lat;
+  document.getElementById('wp-lon').value=lng;
+  const disp=document.getElementById('wp-pos-display');
+  if(disp) disp.textContent=`${fmtDM(lat,'lat')}   ${fmtDM(lng,'lon')}`;
+}
+
+function setWpPosMode(mode){
+  document.querySelectorAll('.wp-pos-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.m===mode));
+  document.getElementById('wp-pos-gps').style.display=mode==='gps'?'block':'none';
+  document.getElementById('wp-pos-map').style.display=mode==='map'?'block':'none';
+  document.getElementById('wp-pos-coord').style.display=mode==='coord'?'block':'none';
+  if(mode==='gps'&&S.gps) useGPS();
+}
+
+function startMapPick(){
+  hideModal('wp-ov');
+  const hint=document.getElementById('wp-pick-hint');
+  if(hint) hint.style.display='flex';
+  _wpPickMode=true;
+  if(map) map.getContainer().style.cursor='crosshair';
+}
+
+function cancelMapPick(){
+  _wpPickMode=false;
+  const hint=document.getElementById('wp-pick-hint');
+  if(hint) hint.style.display='none';
+  if(map) map.getContainer().style.cursor='';
+  if(_wpPickMarker){map.removeLayer(_wpPickMarker);_wpPickMarker=null;}
+  showModal('wp-ov');
+}
+
+function _onMapPickClick(latlng){
+  if(!_wpPickMode) return;
+  _wpPickMode=false;
+  const hint=document.getElementById('wp-pick-hint');
+  if(hint) hint.style.display='none';
+  if(map) map.getContainer().style.cursor='';
+  if(_wpPickMarker){map.removeLayer(_wpPickMarker);_wpPickMarker=null;}
+  _setWpLatLng(latlng.lat,latlng.lng);
+  setWpPosMode('map');
+  showModal('wp-ov');
+}
+
+function parseDDMM(str){
+  if(!str||!str.trim()) return NaN;
+  str=str.trim();
+  // Format décimal pur : "76.5" ou "76,5"
+  const dec=parseFloat(str.replace(',','.'));
+  if(!isNaN(dec)&&!/[°'"]/.test(str)) return dec;
+  // Format DD°MM,MMM' [NSEW] ou DD°MM'SS" [NSEW]
+  const m=str.match(/^(\d+)[°\s]+(\d+)[,.](\d*)['\s]*(?:(\d+)["\s]*)?([NSEWnsew])?/);
+  if(m){
+    const deg=parseInt(m[1]);
+    const minI=parseInt(m[2]);
+    const minD=m[3]?parseInt(m[3])/Math.pow(10,m[3].length):0;
+    const sec=m[4]?parseInt(m[4])/60:0;
+    const sign=(m[5]&&'SWsw'.includes(m[5]))?-1:1;
+    return sign*(deg+(minI+minD+sec)/60);
+  }
+  // Fallback: décimal avec virgule
+  return parseFloat(str.replace(',','.'));
+}
+
+function updateWpFromCoords(){
+  const latStr=document.getElementById('wp-coord-lat')?.value||'';
+  const lonStr=document.getElementById('wp-coord-lon')?.value||'';
+  const lat=parseDDMM(latStr);
+  const lon=parseDDMM(lonStr);
+  const status=document.getElementById('wp-coord-status');
+  if(!isNaN(lat)&&!isNaN(lon)){
+    _setWpLatLng(lat,lon);
+    if(status) status.textContent='';
+  } else {
+    if(status) status.textContent='Format: 76°30,500\' N  ou  76.5042';
+  }
+}
+
 function useGPS(){
   if(!S.gps){toast('⚠️ GPS non disponible','warn');return;}
-  document.getElementById('wp-lat').value=S.gps.lat.toFixed(6);
-  document.getElementById('wp-lon').value=S.gps.lng.toFixed(6);
+  _setWpLatLng(S.gps.lat,S.gps.lng);
+  toast('📍 Position GPS copiée','ok');
 }
 
 async function saveWaypoint(){
@@ -2001,7 +2381,8 @@ async function saveWaypoint(){
   const comment=document.getElementById('wp-comment').value.trim();
   const lat=parseFloat(document.getElementById('wp-lat').value);
   const lng=parseFloat(document.getElementById('wp-lon').value);
-  if(isNaN(lat)||isNaN(lng)){toast('Position invalide','err');return;}
+  if(isNaN(lat)||isNaN(lng)){toast('⚠️ Position non définie — utilise GPS, Carte ou Coords','err');return;}
+  const isNew=!S.editWpId;
   const id=S.editWpId||gid();
   const phIds=[];
   for(const p of S.pendPh){
@@ -2011,6 +2392,7 @@ async function saveWaypoint(){
   const ice=getIceData();
   const audioId=_voiceDataUrl?gid():null;
   if(audioId) await dbPut('audio',{id:audioId,wpId:id,data:_voiceDataUrl,ts:Date.now()});
+  await saveWpDocs(id);
   const wp={id,type:S.selType,name,comment,lat,lng,phIds,ice,audioId,ts:Date.now()};
   await dbPut('wp',wp);
   const ei=S.wps.findIndex(w=>w.id===id);
@@ -2019,25 +2401,86 @@ async function saveWaypoint(){
   addWpMarker(wp);
   document.getElementById('sb-wps').textContent=S.wps.length;
   hideModal('wp-ov');toast(`✅ "${name}" enregistré`,'ok');
+  // Centrer la carte sur le nouveau point
+  if(isNew){
+    map.setView([lat,lng],Math.max(map.getZoom(),10));
+    setTimeout(()=>wpMarkers[wp.id]?.openPopup(),400);
+  }
+}
+
+// ── Icône waypoint avec code glace (Option C) ─────────────
+// Couleur = concentration  │  Forme = type de glace  │  Halo orange = crêtes ≥ 3
+function _wpIceIconHtml(e,c,ice,hasP){
+  const badge=hasP?`<div style="position:absolute;top:-4px;right:-4px;width:14px;height:14px;background:#c8941e;border-radius:50%;border:1.5px solid rgba(255,255,255,.6);font-size:7px;line-height:14px;text-align:center;z-index:2">📷</div>`:'';
+  // Pas de rapport glace → teardrop standard
+  if(!ice||ice.conc===0){
+    return{
+      html:`<div style="position:relative;width:32px;height:32px;overflow:visible"><div style="width:32px;height:32px;border-radius:50% 50% 50% 0;background:${c};display:flex;align-items:center;justify-content:center;font-size:13px;transform:rotate(-45deg);border:2px solid rgba(255,255,255,.2);box-shadow:0 2px 10px rgba(0,0,0,.5)"><span style="transform:rotate(45deg)">${e}</span></div>${badge}</div>`,
+      size:[32,32],anchor:[7,32]
+    };
+  }
+  // Couleur par concentration
+  // 1-3 bleu clair  4-6 bleu moyen  7-8 bleu foncé  9-10 blanc pack
+  const iceC=ice.conc<=3?'#7ecff0':ice.conc<=6?'#2e9de0':ice.conc<=8?'#1558b8':'#e8f8ff';
+  // Halo ridge : box-shadow non clippé par clip-path
+  const shadow=ice.ridge>=3
+    ?'0 0 0 3px #e07820,0 3px 14px rgba(0,0,0,.7)'
+    :'0 0 0 2px rgba(255,255,255,.22),0 2px 10px rgba(0,0,0,.6)';
+  // Forme par type de glace
+  // NI/FZ → cercle  PK → hexagone  MY → triangle  FY → losange
+  const shapeCSS=
+    (ice.type==='NI'||ice.type==='FZ')?'border-radius:50%':
+    ice.type==='PK'?'clip-path:polygon(50% 0%,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%)':
+    ice.type==='MY'?'clip-path:polygon(50% 4%,96% 96%,4% 96%)':
+    'clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)';
+  // Badge concentration (bas-gauche)
+  const concBadge=`<div style="position:absolute;bottom:-3px;left:-3px;width:14px;height:14px;background:#050d18;border-radius:50%;font-family:'Share Tech Mono',monospace;font-size:8px;color:#3dd4f0;line-height:14px;text-align:center;border:1px solid rgba(61,212,240,.4);z-index:2">${ice.conc}</div>`;
+  return{
+    html:`<div style="position:relative;width:36px;height:36px;overflow:visible"><div style="width:32px;height:32px;margin:2px;${shapeCSS};background:${iceC};display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:${shadow}">${e}</div>${concBadge}${badge}</div>`,
+    size:[36,36],anchor:[18,34]
+  };
 }
 
 function addWpMarker(wp){
   const{e,c}=(WP_CFGS[wp.type]||WP_CFGS.note);
-  const html=`<div style="width:32px;height:32px;border-radius:50% 50% 50% 0;background:${c};display:flex;align-items:center;justify-content:center;font-size:13px;transform:rotate(-45deg);border:2px solid rgba(255,255,255,.2);box-shadow:0 2px 10px rgba(0,0,0,.5)"><span style="transform:rotate(45deg)">${e}</span></div>`;
-  const mk=L.marker([wp.lat,wp.lng],{icon:L.divIcon({html,className:'',iconSize:[32,32],iconAnchor:[7,32]})});
+  const hasP=wp.phIds&&wp.phIds.length>0;
+  const{html,size,anchor}=_wpIceIconHtml(e,c,wp.ice||null,hasP);
+  const mk=L.marker([wp.lat,wp.lng],{icon:L.divIcon({html,className:'',iconSize:size,iconAnchor:anchor})});
   mk.bindPopup(()=>{
     const hasP=wp.phIds&&wp.phIds.length>0;
     return `<div style="min-width:160px">
       <div style="font-family:'Teko',sans-serif;font-size:16px;color:${ACCENT};letter-spacing:1px">${wp.name}</div>
       ${wp.comment?`<div style="font-family:'Crimson Pro',serif;font-size:12px;color:var(--text2);margin:4px 0">${wp.comment}</div>`:''}
       <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">${fmtDM(wp.lat,'lat')}<br>${fmtDM(wp.lng,'lon')}</div>
-      ${wp.ice&&wp.ice.conc>0?`<div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent3);margin-top:4px">🧊 ${wp.ice.conc}/10 · ${wp.ice.type||''} · R${wp.ice.ridge}</div>`:''}
+      ${wp.ice&&wp.ice.conc>0?`<div style="margin-top:6px;padding:5px 7px;background:rgba(30,80,140,.25);border-left:3px solid ${wp.ice.conc<=3?'#7ecff0':wp.ice.conc<=6?'#2e9de0':wp.ice.conc<=8?'#1558b8':'#e8f8ff'};border-radius:0 3px 3px 0">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#7ecff0;font-weight:bold">🧊 ${wp.ice.conc}/10 — ${wp.ice.type==='FY'?'1re année':wp.ice.type==='MY'?'Multi-annuelle':wp.ice.type==='NI'?'Nouvelle':wp.ice.type==='PK'?'Pancake':wp.ice.type==='FZ'?'Frasil':wp.ice.type||''}</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text3);margin-top:2px">Glaçons: ${wp.ice.floe||'?'}  ·  Crêtes: ${wp.ice.ridge}/5${wp.ice.ridge>=3?' ⚠️':''}</div>
+      </div>`:''}
       <div style="display:flex;gap:5px;margin-top:8px">
         <button onclick="editWaypoint('${wp.id}')" style="flex:1;padding:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">✏️ Éditer</button>
         ${hasP?`<button onclick="viewWpPhotos('${wp.id}')" style="flex:1;padding:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">📷 ${wp.phIds.length}</button>`:''}
         ${wp.audioId?`<button onclick="playWpAudio('${wp.id}')" style="padding:4px 6px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">🎙</button>`:''}
       </div>
+      <div id="wp-docs-${wp.id}" style="margin-top:4px"></div>
     </div>`;
+  });
+  mk.on('popupopen',()=>{
+    // Charger et afficher les docs du WP dans le popup
+    if(db&&db.objectStoreNames.contains('docs')){
+      dbIdx('docs','wpId',wp.id).then(docs=>{
+        const el=document.getElementById(`wp-docs-${wp.id}`);
+        if(!el||!docs.length)return;
+        el.innerHTML=docs.map(d=>`<span class="doc-chip" onclick="openDoc('${d.id}')" style="cursor:pointer">${docIcon(d.mime)} ${d.name} <span style="color:var(--text3)">(${fmtSize(d.size)})</span></span>`).join('');
+      });
+    }
+  });
+  // En mode sélection carte, le clic ouvre la fiche complète au lieu du popup
+  mk.on('click', ()=>{
+    if(_wpSelectMode){
+      cancelWpSelect();
+      map.closePopup();
+      setTimeout(()=>editWaypoint(wp.id),50);
+    }
   });
   mk.addTo(wpGrp);
   wpMarkers[wp.id]=mk;
@@ -2048,14 +2491,18 @@ function addWpMarker(wp){
 async function editWaypoint(id){
   const wp=S.wps.find(w=>w.id===id);if(!wp)return;
   S.editWpId=id;S.pendPh=[];
+  S.pendDocs=[];
+  renderPendingDocs();
   document.getElementById('wp-modal-title').textContent='✏️ Modifier Point';
   document.getElementById('wp-name').value=wp.name;
   document.getElementById('wp-comment').value=wp.comment||'';
-  document.getElementById('wp-lat').value=wp.lat;
-  document.getElementById('wp-lon').value=wp.lng;
   document.getElementById('btn-wp-del').style.display='inline-flex';
   selType(wp.type);
+  // Init position UI with existing coords
+  setWpPosMode('gps');
+  _setWpLatLng(wp.lat,wp.lng);
   if(wp.phIds&&wp.phIds.length>0){const phs=await dbIdx('ph','wpId',id);S.pendPh=phs.map(p=>({...p,isNew:false}));}
+  await loadWpDocs(id);
   resetIceForm();populateIceForm(wp.ice||null);
   resetVoiceForm();
   if(wp.audioId){const auRecs=await dbIdx('audio','wpId',id);if(auRecs.length)populateVoiceForm(auRecs[0].data);}
@@ -2173,6 +2620,92 @@ async function deleteViewedPhoto(){
   const wp=S.wps.find(w=>w.id===S.viewPhWpId);
   if(wp){wp.phIds=wp.phIds.filter(id=>id!==ph.id);await dbPut('wp',wp);}
   hideModal('photo-ov');toast('🗑 Photo supprimée');
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  FICHIERS JOINTS (vidéo, PDF, etc.)                      ║
+// ╚══════════════════════════════════════════════════════════╝
+// pendDocs : [{id, name, mime, data(base64), size, isNew}]
+if(!S.pendDocs) S.pendDocs=[];
+
+const DOC_ICONS={
+  'video':'🎥', 'audio':'🎙', 'image':'🖼',
+  'application/pdf':'📄', 'text':'📝',
+  'application/gpx':'📍', 'application/geo':'📍',
+};
+function docIcon(mime){
+  for(const[k,v] of Object.entries(DOC_ICONS)){
+    if(mime&&mime.startsWith(k)) return v;
+  }
+  return '📎';
+}
+function fmtSize(bytes){
+  if(bytes<1024)return bytes+'B';
+  if(bytes<1048576)return (bytes/1024).toFixed(0)+'KB';
+  return (bytes/1048576).toFixed(1)+'MB';
+}
+
+function onDocInput(evt){
+  Array.from(evt.target.files).forEach(f=>{
+    if(f.size>200*1024*1024){toast(`⚠️ ${f.name} trop lourd (max 200 Mo)`,'warn');return;}
+    const r=new FileReader();
+    r.onload=e=>{
+      S.pendDocs.push({id:gid(),name:f.name,mime:f.type,size:f.size,data:e.target.result,isNew:true});
+      renderPendingDocs();
+    };
+    r.readAsDataURL(f);
+  });
+  evt.target.value='';
+}
+
+function renderPendingDocs(){
+  const el=document.getElementById('doc-list');
+  if(!el)return;
+  if(!S.pendDocs.length){el.innerHTML='';return;}
+  el.innerHTML=S.pendDocs.map((d,i)=>
+    `<span class="doc-chip">${docIcon(d.mime)} ${d.name} <span style="color:var(--text3)">(${fmtSize(d.size)})</span><button onclick="removePendingDoc(${i})" title="Supprimer">✕</button></span>`
+  ).join('');
+}
+
+function removePendingDoc(i){S.pendDocs.splice(i,1);renderPendingDocs();}
+
+async function loadWpDocs(wpId){
+  S.pendDocs=[];
+  if(!db.objectStoreNames.contains('docs'))return;
+  const docs=await dbIdx('docs','wpId',wpId);
+  S.pendDocs=docs.map(d=>({...d,isNew:false}));
+  renderPendingDocs();
+}
+
+async function saveWpDocs(wpId){
+  if(!db.objectStoreNames.contains('docs'))return [];
+  const docIds=[];
+  for(const d of S.pendDocs){
+    if(d.isNew) await dbPut('docs',{id:d.id,wpId,name:d.name,mime:d.mime,size:d.size,data:d.data,ts:Date.now()});
+    docIds.push(d.id);
+  }
+  return docIds;
+}
+
+function openDoc(docId){
+  dbAll('docs').then(all=>{
+    const d=all.find(x=>x.id===docId);
+    if(!d)return;
+    const a=document.createElement('a');
+    a.href=d.data;
+    if(d.mime&&d.mime.startsWith('video')){
+      // Ouvrir dans une mini-modal vidéo
+      const ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px';
+      ov.innerHTML=`<video src="${d.data}" controls autoplay style="max-width:95vw;max-height:80vh;border-radius:6px"></video>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${d.name} · ${fmtSize(d.size)}</div>
+        <button onclick="this.parentElement.remove()" style="padding:6px 18px;border:1px solid var(--danger);border-radius:4px;background:rgba(216,64,64,.1);color:var(--danger);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer">✕ Fermer</button>`;
+      document.body.appendChild(ov);
+      ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    } else {
+      a.download=d.name;a.click();
+    }
+  });
 }
 
 // ╔══════════════════════════════════════════════════════════╗
@@ -2743,6 +3276,107 @@ toggleOverlay=function(k){
     _origToggleOverlay(k);
   }
 };
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  SENTINEL-2 WMS OVERLAY (Copernicus Data Space)          ║
+// ╚══════════════════════════════════════════════════════════╝
+let _sentinelLayer=null, _sentinelActive=false;
+
+// Persistance des réglages en localStorage
+function saveSentinelSettings(){
+  const s={
+    instanceId:document.getElementById('sh-instance-id')?.value||'',
+    date:document.getElementById('sh-date')?.value||'',
+    layer:document.getElementById('sh-layer')?.value||'TRUE_COLOR',
+    maxcc:document.getElementById('sh-maxcc')?.value||'30',
+    opacity:document.getElementById('sh-opacity')?.value||'85',
+  };
+  localStorage.setItem('sh_settings',JSON.stringify(s));
+}
+function loadSentinelSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('sh_settings')||'{}');
+    if(document.getElementById('sh-instance-id')) document.getElementById('sh-instance-id').value=s.instanceId||'';
+    if(document.getElementById('sh-date')) document.getElementById('sh-date').value=s.date||todayISO();
+    if(document.getElementById('sh-layer')) document.getElementById('sh-layer').value=s.layer||'TRUE_COLOR';
+    if(document.getElementById('sh-maxcc')) document.getElementById('sh-maxcc').value=s.maxcc||'30';
+    if(document.getElementById('sh-opacity')){
+      document.getElementById('sh-opacity').value=s.opacity||'85';
+      document.getElementById('sh-opacity-lbl').textContent=(s.opacity||'85')+'%';
+    }
+  }catch(e){}
+}
+
+function toggleSentinelOverlay(){
+  _sentinelActive=!_sentinelActive;
+  const chip=document.getElementById('ov-sentinel');
+  const bar=document.getElementById('sentinel-bar');
+  chip.classList.toggle('on',_sentinelActive);
+  if(_sentinelActive){
+    bar.style.display='block';
+    loadSentinelSettings();
+    // Si instance ID déjà enregistré, appliquer directement
+    const saved=JSON.parse(localStorage.getItem('sh_settings')||'{}');
+    if(saved.instanceId) applySentinelLayer();
+  } else {
+    bar.style.display='none';
+    clearSentinelLayer();
+  }
+}
+
+function applySentinelLayer(){
+  const instanceId=(document.getElementById('sh-instance-id')?.value||'').trim();
+  if(!instanceId){
+    document.getElementById('sh-status').textContent='⚠ Instance ID requis — créer un compte gratuit sur dataspace.copernicus.eu';
+    document.getElementById('sh-status').style.color='var(--warn)';
+    return;
+  }
+  const date=document.getElementById('sh-date')?.value||todayISO();
+  const layer=document.getElementById('sh-layer')?.value||'TRUE_COLOR';
+  const maxcc=parseInt(document.getElementById('sh-maxcc')?.value||'30');
+  const opacity=parseInt(document.getElementById('sh-opacity')?.value||'85')/100;
+  saveSentinelSettings();
+  // Supprimer l'ancienne couche
+  if(_sentinelLayer){map.removeLayer(_sentinelLayer);_sentinelLayer=null;}
+  const wmsUrl=`https://sh.dataspace.copernicus.eu/ogc/wms/${instanceId}`;
+  _sentinelLayer=L.tileLayer.wms(wmsUrl,{
+    layers:layer,
+    format:'image/png',
+    transparent:true,
+    version:'1.3.0',
+    time:`${date}/${date}`,
+    maxcc,
+    opacity,
+    attribution:'© Copernicus / Sentinel Hub',
+    crossOrigin:true,
+  });
+  _sentinelLayer.on('tileerror',()=>{
+    document.getElementById('sh-status').textContent='✕ Erreur — vérifier Instance ID ou choisir une autre date (nuages?)';
+    document.getElementById('sh-status').style.color='var(--danger)';
+  });
+  _sentinelLayer.on('tileload',()=>{
+    document.getElementById('sh-status').textContent=`✓ ${layer} · ${date} · nuages ≤${maxcc}%`;
+    document.getElementById('sh-status').style.color='var(--green)';
+  });
+  _sentinelLayer.addTo(map);
+  document.getElementById('sh-status').textContent='Chargement…';
+  document.getElementById('sh-status').style.color='var(--text3)';
+  toast('🛰 Sentinel-2 activé','ok');
+}
+
+function clearSentinelLayer(){
+  if(_sentinelLayer){map.removeLayer(_sentinelLayer);_sentinelLayer=null;}
+  _sentinelActive=false;
+  document.getElementById('ov-sentinel')?.classList.remove('on');
+  document.getElementById('sentinel-bar').style.display='none';
+  document.getElementById('sh-status').textContent='';
+}
+
+function updateSentinelOpacity(val){
+  document.getElementById('sh-opacity-lbl').textContent=val+'%';
+  saveSentinelSettings();
+  if(_sentinelLayer) _sentinelLayer.setOpacity(parseInt(val)/100);
+}
 
 // ╔══════════════════════════════════════════════════════════╗
 // ║  VUE POLAIRE — EPSG:3413 (Polar Stereographic North)     ║
@@ -3702,6 +4336,16 @@ async function deleteSketch(id){
   await dbDel('sketches',id);
   map.closePopup();toast('🗑 Croquis supprimé');
 }
+async function clearAllSketches(){
+  if(!_sketches.length){toast('Aucun croquis à effacer','warn');return;}
+  if(!confirm(`Effacer les ${_sketches.length} croquis ? Cette action est irréversible.`)) return;
+  for(const sk of _sketches){
+    if(sk._layer) sketchGrp.removeLayer(sk._layer);
+    await dbDel('sketches',sk.id);
+  }
+  _sketches=[];
+  toast('🗑 Tous les croquis effacés','ok');
+}
 async function loadSketches(){
   _sketches=await dbAll('sketches');
   _sketches.forEach(s=>_renderSketch(s));
@@ -3750,6 +4394,41 @@ function generateReport(){
 function copyReport(){
   const ta=document.getElementById('report-text'); if(!ta) return;
   navigator.clipboard.writeText(ta.value).then(()=>toast('📋 Copié','ok')).catch(()=>toast('Erreur copie','err'));
+}
+async function shareReport(){
+  const ta=document.getElementById('report-text');
+  if(!ta||!ta.value){toast('Générer le rapport d\'abord','warn');return;}
+  const text=ta.value;
+  const title='Rapport IceWatch — Reconnaissance Glace';
+  // API Web Share native (Android/iOS → choisit WhatsApp, mail, etc.)
+  if(navigator.share){
+    try{
+      await navigator.share({title,text});
+      return;
+    }catch(e){
+      if(e.name==='AbortError') return; // utilisateur a annulé
+    }
+  }
+  // Fallback : menu de partage manuel
+  const enc=encodeURIComponent(text);
+  const encT=encodeURIComponent(title);
+  const waUrl=`https://wa.me/?text=${encT}%0A%0A${enc}`;
+  const mailUrl=`mailto:?subject=${encT}&body=${enc}`;
+  // Petit menu inline
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(5,13,24,.85);display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML=`
+    <div style="background:#091525;border:1px solid #1a3050;border-radius:8px;padding:24px 32px;min-width:260px;text-align:center">
+      <div style="font-family:'Teko',sans-serif;font-size:18px;color:#3dd4f0;letter-spacing:1px;margin-bottom:16px">🔗 Partager le rapport</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <a href="${waUrl}" target="_blank" style="display:block;padding:10px;background:rgba(61,212,240,.08);border:1px solid #1a3050;border-radius:5px;color:#25d366;font-family:'Share Tech Mono',monospace;font-size:12px;text-decoration:none">💬 WhatsApp</a>
+        <a href="${mailUrl}" style="display:block;padding:10px;background:rgba(61,212,240,.08);border:1px solid #1a3050;border-radius:5px;color:#8fb2d0;font-family:'Share Tech Mono',monospace;font-size:12px;text-decoration:none">📧 E-mail</a>
+        <button onclick="navigator.clipboard.writeText(${JSON.stringify(text)}).then(()=>toast('📋 Copié','ok'))" style="padding:10px;background:rgba(61,212,240,.08);border:1px solid #1a3050;border-radius:5px;color:#3dd4f0;font-family:'Share Tech Mono',monospace;font-size:12px;cursor:pointer">📋 Copier le texte</button>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:8px;background:transparent;border:1px solid #d84040;border-radius:5px;color:#d84040;font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;margin-top:4px">✕ Fermer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
 }
 function downloadReport(){
   const ta=document.getElementById('report-text'); if(!ta||!ta.value) return;
