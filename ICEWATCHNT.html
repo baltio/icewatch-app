@@ -1511,6 +1511,7 @@ select.f-ctrl option{background:var(--bg3);}
       <button class="btn btn-s" onclick="copyReport()">📋 Copier</button>
       <button class="btn btn-s" onclick="downloadReport()">⬇ .txt</button>
       <button class="btn btn-s" onclick="downloadReportHTML()">🌐 .html</button>
+      <button class="btn btn-p" onclick="downloadReportPDF()">🖨 PDF</button>
       <button class="btn btn-s" onclick="exportPOIsGeoJSON()">📤 GeoJSON</button>
       <button class="btn btn-p" onclick="shareReport()">🔗 Partager</button>
       <button class="btn btn-p" onclick="exportMissionZIP()">📦 Export complet</button>
@@ -4943,6 +4944,78 @@ ${zoneHtml?`<h2>ZONES ANNOTÉES</h2><ul>${zoneHtml}</ul>`:''}
   a.href='data:text/html;charset=utf-8,'+encodeURIComponent(html);
   a.download='rapport-icewatch-'+new Date().toISOString().slice(0,10)+'.html';
   a.click();
+}
+
+async function downloadReportPDF(){
+  // Même contenu que le rapport HTML mais optimisé print (fond blanc, police noire)
+  const phByWp={};
+  await new Promise(res=>{
+    const tx=_db.transaction('ph','readonly');
+    const store=tx.objectStore('ph');
+    const idx=store.index('wpId');
+    S.wps.forEach(wp=>{
+      const req=idx.getAll(wp.id);
+      req.onsuccess=e=>{phByWp[wp.id]=e.target.result||[];};
+    });
+    tx.oncomplete=res;
+  });
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('fr-FR')+' '+now.toLocaleTimeString('fr-FR');
+  const icons=Object.fromEntries(Object.entries(WP_CFGS).map(([k,v])=>[k,v.e]));
+  let wpHtml='';
+  (S.wps||[]).forEach(wp=>{
+    const photos=phByWp[wp.id]||[];
+    const iceStr=wp.ice&&wp.ice.conc>0?`<div class="ice">🧊 Conc: <b>${wp.ice.conc}/10</b> | Type: <b>${wp.ice.type||'?'}</b> | Floe: <b>${wp.ice.floe||'?'}</b> | Ridge: <b>${wp.ice.ridge}/5</b></div>`:'';
+    const cmtStr=wp.comment?`<div class="cmt">${wp.comment}</div>`:'';
+    const tsStr=wp.ts?`<span class="ts">${new Date(wp.ts).toLocaleString('fr-FR')}</span>`:'';
+    const photosHtml=photos.map(ph=>`<img src="${ph.data}" alt="${ph.name||''}">`).join('');
+    wpHtml+=`<div class="wp"><div class="wp-head">${icons[wp.type]||'📍'} <b>${wp.name}</b> ${tsStr}<div class="coord">${fmtDM(wp.lat,'lat')} / ${fmtDM(wp.lng,'lon')}</div></div>${cmtStr}${iceStr}${photos.length?`<div class="photos">${photosHtml}</div>`:''}</div>`;
+  });
+  let zoneHtml='';(_zones||[]).forEach(z=>{zoneHtml+=`<li>${z.name} (${z.type}) — ${z.pts.length} sommets</li>`;});
+  let trkHtml='';(S.trks||[]).forEach(t=>{trkHtml+=`<li>${t.name} | ${((t.recDist||0)/1852).toFixed(2)} NM | ${fmtDur(t.end-t.start)}</li>`;});
+  const navire=_homePos?`<p><b>Navire :</b> ${_homePos.name} — ${fmtDM(_homePos.lat,'lat')} / ${fmtDM(_homePos.lng,'lon')}</p>`:'';
+  const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>Rapport IceWatch ${now.toISOString().slice(0,10)}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Arial,sans-serif;font-size:12px;color:#111;background:#fff;padding:20mm 18mm;}
+h1{font-size:18px;border-bottom:2px solid #1a5080;padding-bottom:6px;margin-bottom:12px;color:#0a3050;}
+h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#1a5080;margin:18px 0 8px;border-bottom:1px solid #c0d8ec;padding-bottom:3px;}
+p{margin:4px 0;line-height:1.5;}
+.wp{border:1px solid #b0cce0;border-radius:5px;padding:10px 14px;margin-bottom:10px;page-break-inside:avoid;}
+.wp-head{display:flex;flex-direction:column;gap:2px;margin-bottom:6px;}
+.wp-head b{font-size:13px;}
+.coord{font-family:monospace;font-size:10px;color:#25508a;}
+.ts{font-size:9px;color:#888;}
+.cmt{color:#333;font-size:11px;margin:4px 0;font-style:italic;}
+.ice{font-size:10px;background:#eaf4fb;border-radius:3px;padding:3px 8px;margin:5px 0;display:inline-block;color:#1a5080;}
+.photos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.photos img{max-width:240px;max-height:180px;border-radius:4px;border:1px solid #b0cce0;object-fit:cover;}
+ul{padding-left:18px;line-height:1.8;}
+footer{margin-top:24px;border-top:1px solid #c0d8ec;padding-top:6px;font-size:9px;color:#888;}
+@media print{
+  body{padding:10mm;}
+  .photos img{max-width:200px;max-height:150px;}
+  footer{position:fixed;bottom:8mm;left:18mm;right:18mm;}
+}
+</style></head><body>
+<h1>🧊 Rapport de Mission — Reconnaissance Glace</h1>
+<p><b>Date :</b> ${dateStr}</p>${navire}<p><b>Points d'intérêt :</b> ${S.wps.length} | <b>Traces :</b> ${(S.trks||[]).length}</p>
+${trkHtml?`<h2>Traces de vol</h2><ul>${trkHtml}</ul>`:''}
+${wpHtml?`<h2>Points d'intérêt</h2>${wpHtml}`:''}
+${zoneHtml?`<h2>Zones annotées</h2><ul>${zoneHtml}</ul>`:''}
+<footer>Généré le ${dateStr} par IceWatch NT — Commandant Charcot</footer>
+</body></html>`;
+  const w=window.open('','_blank');
+  if(!w){toast('Autorisez les popups pour générer le PDF','warn');return;}
+  w.document.write(html);
+  w.document.close();
+  w.addEventListener('load',()=>{
+    w.focus();
+    w.print();
+  });
+  // Si load ne se déclenche pas (document déjà prêt), imprimer directement
+  setTimeout(()=>{ try{ if(!w.closed){ w.focus(); w.print(); } }catch(e){} },600);
 }
 
 // ╔══════════════════════════════════════════════════════════╗
