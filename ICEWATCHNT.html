@@ -3866,7 +3866,18 @@ async function applySentinelLayer(){
     st.style.color='var(--green)';
   });
   _sentinelLayer.addTo(map);
-  st.textContent='Chargement…';st.style.color='var(--text3)';
+  if(map.getZoom()<7){
+    st.textContent='⚠ Zoomez à ≥ zoom 7 pour charger les tuiles Sentinel-2';
+    st.style.color='var(--warn)';
+  } else {
+    st.textContent='Chargement…';st.style.color='var(--text3)';
+  }
+  // Écouter les changements de zoom
+  map.once('zoomend',()=>{
+    if(_sentinelLayer && map.getZoom()>=7 && st.textContent.startsWith('⚠')) {
+      st.textContent='Chargement…';st.style.color='var(--text3)';
+    }
+  });
   toast('🛰 Sentinel-2 activé','ok');
   const refreshIn=Math.max(60000,_shTokenExpiry-Date.now()-120000);
   _shRefreshTimer=setTimeout(()=>{if(_sentinelActive&&_sentinelLayer) applySentinelLayer();},refreshIn);
