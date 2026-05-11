@@ -995,6 +995,21 @@ select.f-ctrl option{background:var(--bg3);}
             <button onclick="clearSentinelLayer()" style="padding:6px 10px;background:rgba(216,64,64,.08);border:1px solid var(--danger);border-radius:4px;color:var(--danger);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer">✕</button>
           </div>
           <div id="sh-status" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-top:6px;text-align:center"></div>
+          <!-- Cache hors-ligne Sentinel -->
+          <div style="border-top:1px solid rgba(61,212,240,.15);margin-top:10px;padding-top:8px">
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+              <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);flex:1">CACHE HORS-LIGNE :</span>
+              <span id="sh-cache-info" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent3)">--</span>
+            </div>
+            <div id="sh-dl-prog-wrap" style="display:none;margin-bottom:6px">
+              <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);margin-bottom:3px">Téléchargement : <span id="sh-dl-prog-txt">0 / 0</span></div>
+              <div style="background:rgba(0,0,0,.3);border-radius:3px;height:6px"><div id="sh-dl-prog-bar" style="height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width .2s"></div></div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button id="sh-dl-btn" onclick="startSentinelDownload()" style="flex:1;padding:5px;background:rgba(61,212,240,.08);border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">⬇ Télécharger vue</button>
+              <button onclick="clearSentinelCache()" style="padding:5px 8px;background:rgba(216,64,64,.06);border:1px solid var(--danger);border-radius:4px;color:var(--danger);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">🗑</button>
+            </div>
+          </div>
         </div>
 
       </div><!-- /#layer-panel -->
@@ -1777,7 +1792,7 @@ const S = {
 let db;
 async function openDB(){
   return new Promise((res,rej)=>{
-    const r=indexedDB.open('icewatch_db',5);
+    const r=indexedDB.open('icewatch_db',6);
     r.onupgradeneeded=e=>{
       const d=e.target.result;
       if(!d.objectStoreNames.contains('wp'))  d.createObjectStore('wp',{keyPath:'id'});
@@ -1793,15 +1808,21 @@ async function openDB(){
       if(e.oldVersion < 5){
         if(!d.objectStoreNames.contains('docs')){ const sd=d.createObjectStore('docs',{keyPath:'id'}); sd.createIndex('wpId','wpId',{unique:false}); }
       }
+      if(e.oldVersion < 6){
+        if(!d.objectStoreNames.contains('sentinel_tiles')) d.createObjectStore('sentinel_tiles',{keyPath:'id'});
+      }
     };
     r.onsuccess=e=>res(e.target.result);
     r.onerror=e=>rej(e.target.error);
   });
 }
 const dbAll =(s)=>new Promise((r,j)=>{const t=db.transaction(s,'readonly').objectStore(s).getAll();t.onsuccess=()=>r(t.result);t.onerror=()=>j(t.error);});
+const dbGet =(s,k)=>new Promise((r,j)=>{const t=db.transaction(s,'readonly').objectStore(s).get(k);t.onsuccess=()=>r(t.result);t.onerror=()=>j(t.error);});
 const dbPut =(s,o)=>new Promise((r,j)=>{const t=db.transaction(s,'readwrite').objectStore(s).put(o);t.onsuccess=()=>r();t.onerror=()=>j(t.error);});
 const dbDel =(s,id)=>new Promise((r,j)=>{const t=db.transaction(s,'readwrite').objectStore(s).delete(id);t.onsuccess=()=>r();t.onerror=()=>j(t.error);});
 const dbIdx =(s,ix,v)=>new Promise((r,j)=>{const t=db.transaction(s,'readonly').objectStore(s).index(ix).getAll(v);t.onsuccess=()=>r(t.result);t.onerror=()=>j(t.error);});
+const dbCount=(s)=>new Promise((r,j)=>{const t=db.transaction(s,'readonly').objectStore(s).count();t.onsuccess=()=>r(t.result);t.onerror=()=>j(t.error);});
+const dbClear=(s)=>new Promise((r,j)=>{const t=db.transaction(s,'readwrite').objectStore(s).clear();t.onsuccess=()=>r();t.onerror=()=>j(t.error);});
 const gid=()=>Date.now().toString(36)+Math.random().toString(36).substr(2,5);
 
 // ╔══════════════════════════════════════════════════════════╗
@@ -3748,6 +3769,7 @@ function toggleSentinelOverlay(){
   if(_sentinelActive){
     bar.style.display='block';
     loadSentinelSettings();
+    updateSentinelCacheInfo();
     // Si instance ID déjà enregistré, appliquer directement
     const saved=JSON.parse(localStorage.getItem('sh_settings')||'{}');
     if(saved.instanceId) applySentinelLayer();
@@ -3844,14 +3866,29 @@ async function applySentinelLayer(){
         output:{width:256,height:256,responses:[{identifier:'default',format:{type:'image/png'}}]},
         evalscript
       };
-      fetch('https://sh.dataspace.copernicus.eu/api/v1/process',{
-        method:'POST',
-        headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-        body:JSON.stringify(body)
-      })
-        .then(r=>{if(!r.ok)return r.text().then(t=>{throw new Error('HTTP '+r.status+': '+t.slice(0,120))});return r.blob();})
-        .then(blob=>{img.src=URL.createObjectURL(blob);done(null,img);})
-        .catch(e=>done(e,img));
+      const tileKey=`${layer}|${timeFrom}|${coords.z}/${coords.x}/${coords.y}`;
+      (async()=>{
+        try{
+          const cached=await dbGet('sentinel_tiles',tileKey);
+          if(cached&&cached.blob){
+            img.src=URL.createObjectURL(cached.blob);
+            done(null,img);
+            return;
+          }
+        }catch(e){}
+        fetch('https://sh.dataspace.copernicus.eu/api/v1/process',{
+          method:'POST',
+          headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+          body:JSON.stringify(body)
+        })
+          .then(r=>{if(!r.ok)return r.text().then(t=>{throw new Error('HTTP '+r.status+': '+t.slice(0,120))});return r.blob();})
+          .then(blob=>{
+            img.src=URL.createObjectURL(blob);
+            done(null,img);
+            dbPut('sentinel_tiles',{id:tileKey,blob,ts:Date.now()}).catch(()=>{});
+          })
+          .catch(e=>done(e,img));
+      })();
       return img;
     }
   });
@@ -3895,6 +3932,128 @@ function updateSentinelOpacity(val){
   document.getElementById('sh-opacity-lbl').textContent=val+'%';
   saveSentinelSettings();
   if(_sentinelLayer) _sentinelLayer.setOpacity(parseInt(val)/100);
+}
+
+async function updateSentinelCacheInfo(){
+  try{
+    const n=await dbCount('sentinel_tiles');
+    const el=document.getElementById('sh-cache-info');
+    if(el) el.textContent=n>0?`${n} tuiles`:'vide';
+  }catch(e){}
+}
+
+let _shDlActive=false;
+async function startSentinelDownload(){
+  if(_shDlActive)return;
+  const layer=document.getElementById('sh-layer')?.value||'TRUE-COLOR';
+  const date=document.getElementById('sh-date')?.value||todayISO();
+  const maxcc=parseInt(document.getElementById('sh-maxcc')?.value||'100');
+  const st=document.getElementById('sh-status');
+
+  // Obtenir token
+  let token;
+  try{ token=await _getShToken(); }
+  catch(e){ toast('✕ Auth: '+e.message,'warn'); return; }
+
+  const dateTo=new Date(date+'T23:59:59Z');
+  const dateFrom=new Date(dateTo.getTime()-30*24*3600*1000);
+  const timeFrom=dateFrom.toISOString().split('.')[0]+'Z';
+  const timeTo=dateTo.toISOString().split('.')[0]+'Z';
+
+  const EVALSCRIPTS={
+    'TRUE-COLOR':'//VERSION=3\nfunction setup(){return{input:["B04","B03","B02"],output:{bands:3}}}\nfunction evaluatePixel(s){return[3.5*s.B04,3.5*s.B03,3.5*s.B02]}',
+    'TRUE-COLOR-HIGHLIGHT-OPTIMIZED':'//VERSION=3\nfunction setup(){return{input:["B04","B03","B02"],output:{bands:3}}}\nfunction evaluatePixel(s){return[Math.min(3.5*s.B04,1),Math.min(3.5*s.B03,1),Math.min(3.5*s.B02,1)]}',
+    'FALSE-COLOR':'//VERSION=3\nfunction setup(){return{input:["B08","B04","B03"],output:{bands:3}}}\nfunction evaluatePixel(s){return[3.5*s.B08,3.5*s.B04,3.5*s.B03]}',
+    'NDVI':'//VERSION=3\nfunction setup(){return{input:["B04","B08"],output:{bands:3}}}\nfunction colorize(v){if(v<-0.5)return[0.5,0.5,0.5];if(v<0)return[0.9,0.7,0.5];if(v<0.2)return[0.9,0.9,0.1];if(v<0.4)return[0.5,0.8,0.2];return[0.1,0.6,0.1]}function evaluatePixel(s){return colorize((s.B08-s.B04)/(s.B08+s.B04))}',
+    'NDWI':'//VERSION=3\nfunction setup(){return{input:["B03","B08"],output:{bands:3}}}\nfunction colorize(v){if(v>0.3)return[0,0.5,1];if(v>0)return[0.5,0.8,1];if(v>-0.3)return[0.8,0.9,0.9];return[0.9,0.8,0.6]}function evaluatePixel(s){return colorize((s.B03-s.B08)/(s.B03+s.B08))}',
+    'NDMI':'//VERSION=3\nfunction setup(){return{input:["B08","B11"],output:{bands:3}}}\nfunction colorize(v){if(v>0.3)return[0,0.3,0.8];if(v>0)return[0.5,0.7,0.9];if(v>-0.3)return[0.9,0.8,0.5];return[0.8,0.5,0.2]}function evaluatePixel(s){return colorize((s.B08-s.B11)/(s.B08+s.B11))}',
+  };
+  const evalscript=EVALSCRIPTS[layer]||EVALSCRIPTS['TRUE-COLOR'];
+
+  // Calculer les tuiles de la vue actuelle, zoom 7 à zoom actuel (max 10)
+  const bnds=map.getBounds();
+  const zMin=7, zMax=Math.min(10,Math.max(7,map.getZoom()));
+  const n2=z=>Math.pow(2,z);
+  const toX=(lo,z)=>Math.floor((lo+180)/360*n2(z));
+  const toY=(la,z)=>{const r=la*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n2(z));};
+  const sw=bnds.getSouthWest(),ne=bnds.getNorthEast();
+  const tiles=[];
+  for(let z=zMin;z<=zMax;z++){
+    const x1=toX(sw.lng,z),x2=toX(ne.lng,z),y1=toY(ne.lat,z),y2=toY(sw.lat,z);
+    for(let x=x1;x<=x2;x++) for(let y=y1;y<=y2;y++) tiles.push({x,y,z});
+  }
+  if(!tiles.length){toast('Aucune tuile à télécharger','warn');return;}
+  if(tiles.length>500){toast(`⚠ ${tiles.length} tuiles — zoomez plus ou réduisez la zone`,'warn');return;}
+
+  _shDlActive=true;
+  const btn=document.getElementById('sh-dl-btn');
+  if(btn) btn.disabled=true;
+  const pw=document.getElementById('sh-dl-prog-wrap');
+  const pb=document.getElementById('sh-dl-prog-bar');
+  const pt=document.getElementById('sh-dl-prog-txt');
+  if(pw) pw.style.display='block';
+  if(st){st.textContent=`Téléchargement ${tiles.length} tuiles…`;st.style.color='var(--text3)';}
+
+  // Calculer bounds d'une tuile z/x/y → LatLngBounds
+  function tileToBBox(z,x,y){
+    const n=Math.pow(2,z);
+    const lon0=x/n*360-180;
+    const lon1=(x+1)/n*360-180;
+    const lat0=Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI;
+    const lat1=Math.atan(Math.sinh(Math.PI*(1-2*(y+1)/n)))*180/Math.PI;
+    return [lon0,lat1,lon1,lat0]; // [swLng,swLat,neLng,neLat]
+  }
+
+  let done2=0;
+  const BS=4; // batch size (Process API peut être lent)
+  for(let i=0;i<tiles.length;i+=BS){
+    await Promise.all(tiles.slice(i,i+BS).map(async t=>{
+      const tileKey=`${layer}|${timeFrom}|${t.z}/${t.x}/${t.y}`;
+      try{
+        // Vérifier si déjà en cache
+        const cached=await dbGet('sentinel_tiles',tileKey);
+        if(cached&&cached.blob){done2++;return;}
+        const [swLng,swLat,neLng,neLat]=tileToBBox(t.z,t.x,t.y);
+        const body={
+          input:{
+            bounds:{bbox:[swLng,swLat,neLng,neLat],properties:{crs:'http://www.opengis.net/def/crs/EPSG/0/4326'}},
+            data:[{type:'sentinel-2-l2a',dataFilter:{timeRange:{from:timeFrom,to:timeTo},maxCloudCoverage:maxcc}}]
+          },
+          output:{width:256,height:256,responses:[{identifier:'default',format:{type:'image/png'}}]},
+          evalscript
+        };
+        const r=await fetch('https://sh.dataspace.copernicus.eu/api/v1/process',{
+          method:'POST',
+          headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+          body:JSON.stringify(body)
+        });
+        if(r.ok){
+          const blob=await r.blob();
+          await dbPut('sentinel_tiles',{id:tileKey,blob,ts:Date.now()});
+        }
+      }catch(e){}
+      done2++;
+      const pct=Math.round(done2/tiles.length*100);
+      if(pb) pb.style.width=pct+'%';
+      if(pt) pt.textContent=`${done2} / ${tiles.length}`;
+    }));
+  }
+
+  _shDlActive=false;
+  if(btn) btn.disabled=false;
+  if(pw) pw.style.display='none';
+  toast(`✅ Sentinel-2 hors-ligne : ${done2} tuiles`,'ok');
+  if(st){st.textContent=`✓ ${done2} tuiles en cache hors-ligne`;st.style.color='var(--green)';}
+  updateSentinelCacheInfo();
+}
+
+async function clearSentinelCache(){
+  if(!confirm('Vider le cache Sentinel-2 hors-ligne ?'))return;
+  try{
+    await dbClear('sentinel_tiles');
+    toast('🗑 Cache Sentinel-2 vidé','ok');
+    updateSentinelCacheInfo();
+  }catch(e){toast('Erreur: '+e.message,'warn');}
 }
 
 // ╔══════════════════════════════════════════════════════════╗
@@ -5524,6 +5683,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   // GPS : démarrage automatique
   startGPS();
   updateCacheInfo();
+  updateSentinelCacheInfo();
 
   // Reprendre enregistrement si page rechargée (ex: photo tablette tue la page)
   const _wasRec=localStorage.getItem('icewatch-was-recording');
