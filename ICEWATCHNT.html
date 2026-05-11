@@ -960,13 +960,8 @@ select.f-ctrl option{background:var(--bg3);}
           <div style="display:flex;gap:4px;margin-bottom:7px">
             <input id="sh-password" type="password" placeholder="mot de passe" style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 7px;outline:none"/>
           </div>
-          <!-- Instance ID -->
-          <div style="margin-bottom:7px">
-            <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:3px">INSTANCE ID <a href="https://shapps.dataspace.copernicus.eu/dashboard/#/" target="_blank" style="color:var(--accent3);text-decoration:none">(dashboard ↗)</a></div>
-            <div style="display:flex;gap:4px">
-              <input id="sh-instance-id" type="text" placeholder="ex: 11f08a8e-4635-..." style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 7px;outline:none" oninput="saveSentinelSettings()"/>
-            </div>
-          </div>
+          <!-- Instance ID (conservé pour compatibilité, non utilisé par l'API Process) -->
+          <input id="sh-instance-id" type="hidden" oninput="saveSentinelSettings()"/>
           <!-- Date -->
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px;flex-wrap:wrap">
             <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">DATE :</span>
@@ -3803,79 +3798,65 @@ async function findLatestSentinelDate(){
 }
 
 async function applySentinelLayer(){
-  const instanceId=(document.getElementById('sh-instance-id')?.value||'').trim();
-  if(!instanceId){
-    document.getElementById('sh-status').textContent='⚠ Instance ID requis — voir dashboard Copernicus';
-    document.getElementById('sh-status').style.color='var(--warn)';
-    return;
-  }
   const date=document.getElementById('sh-date')?.value||todayISO();
   const layer=document.getElementById('sh-layer')?.value||'TRUE-COLOR';
   const maxcc=parseInt(document.getElementById('sh-maxcc')?.value||'100');
   const opacity=parseInt(document.getElementById('sh-opacity')?.value||'85')/100;
   saveSentinelSettings();
-  // Obtenir token OAuth2
+
   const st=document.getElementById('sh-status');
   st.textContent='🔑 Authentification Copernicus…';st.style.color='var(--text3)';
   let token;
   try{ token=await _getShToken(); }
   catch(e){ st.textContent='✕ Auth: '+e.message;st.style.color='var(--danger)';return; }
 
-  // Supprimer l'ancienne couche
   if(_sentinelLayer){map.removeLayer(_sentinelLayer);_sentinelLayer=null;}
   if(_shRefreshTimer){clearTimeout(_shRefreshTimer);_shRefreshTimer=null;}
 
-  // Étendre L.TileLayer.WMS pour injecter Authorization via fetch+blob
-  // (les <img> du TileLayer standard ne supportent pas les headers custom)
-  const SentinelWMSTileLayer = L.TileLayer.WMS.extend({
-    createTile(coords, done){
-      const url = this.getTileUrl(coords);
-      const img = document.createElement('img'); img.alt='';
-      fetch(url, {headers:{Authorization:'Bearer '+token}})
-        .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.blob(); })
-        .then(blob=>{ img.src=URL.createObjectURL(blob); done(null,img); })
+  // Evalscripts par couche (API Process — pas besoin de configuration WMS)
+  const EVALSCRIPTS={
+    'TRUE-COLOR':'//VERSION=3\nfunction setup(){return{input:["B04","B03","B02"],output:{bands:3}}}\nfunction evaluatePixel(s){return[3.5*s.B04,3.5*s.B03,3.5*s.B02]}',
+    'TRUE-COLOR-HIGHLIGHT-OPTIMIZED':'//VERSION=3\nfunction setup(){return{input:["B04","B03","B02"],output:{bands:3}}}\nfunction evaluatePixel(s){return[Math.min(3.5*s.B04,1),Math.min(3.5*s.B03,1),Math.min(3.5*s.B02,1)]}',
+    'FALSE-COLOR':'//VERSION=3\nfunction setup(){return{input:["B08","B04","B03"],output:{bands:3}}}\nfunction evaluatePixel(s){return[3.5*s.B08,3.5*s.B04,3.5*s.B03]}',
+    'NDVI':'//VERSION=3\nfunction setup(){return{input:["B04","B08"],output:{bands:3}}}\nfunction colorize(v){if(v<-0.5)return[0.5,0.5,0.5];if(v<0)return[0.9,0.7,0.5];if(v<0.2)return[0.9,0.9,0.1];if(v<0.4)return[0.5,0.8,0.2];return[0.1,0.6,0.1]}function evaluatePixel(s){return colorize((s.B08-s.B04)/(s.B08+s.B04))}',
+    'NDWI':'//VERSION=3\nfunction setup(){return{input:["B03","B08"],output:{bands:3}}}\nfunction colorize(v){if(v>0.3)return[0,0.5,1];if(v>0)return[0.5,0.8,1];if(v>-0.3)return[0.8,0.9,0.9];return[0.9,0.8,0.6]}function evaluatePixel(s){return colorize((s.B03-s.B08)/(s.B03+s.B08))}',
+    'NDMI':'//VERSION=3\nfunction setup(){return{input:["B08","B11"],output:{bands:3}}}\nfunction colorize(v){if(v>0.3)return[0,0.3,0.8];if(v>0)return[0.5,0.7,0.9];if(v>-0.3)return[0.9,0.8,0.5];return[0.8,0.5,0.2]}function evaluatePixel(s){return colorize((s.B08-s.B11)/(s.B08+s.B11))}',
+  };
+  const evalscript=EVALSCRIPTS[layer]||EVALSCRIPTS['TRUE-COLOR'];
+
+  // GridLayer via API Process Copernicus (pas de WMS, pas de configuration instance requise)
+  const SentinelProcessLayer=L.GridLayer.extend({
+    createTile(coords,done){
+      const img=document.createElement('img');img.alt='';
+      const bounds=this._tileCoordsToBounds(coords);
+      const sw=bounds.getSouthWest();
+      const ne=bounds.getNorthEast();
+      const body={
+        input:{
+          bounds:{bbox:[sw.lng,sw.lat,ne.lng,ne.lat],properties:{crs:'http://www.opengis.net/def/crs/EPSG/0/4326'}},
+          data:[{type:'sentinel-2-l2a',dataFilter:{timeRange:{from:date+'T00:00:00Z',to:date+'T23:59:59Z'},maxCloudCoverage:maxcc}}]
+        },
+        output:{width:256,height:256,responses:[{identifier:'default',format:{type:'image/png'}}]},
+        evalscript
+      };
+      fetch('https://sh.dataspace.copernicus.eu/api/v1/process',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify(body)
+      })
+        .then(r=>{if(!r.ok)return r.text().then(t=>{throw new Error('HTTP '+r.status+': '+t.slice(0,120))});return r.blob();})
+        .then(blob=>{img.src=URL.createObjectURL(blob);done(null,img);})
         .catch(e=>done(e,img));
       return img;
     }
   });
 
-  // Vérifier les bounds de la configuration avant de charger
-  try{
-    const capUrl=`https://sh.dataspace.copernicus.eu/ogc/wms/${instanceId}?SERVICE=WMS&REQUEST=GetCapabilities`;
-    const capText=await fetch(capUrl,{headers:{Authorization:'Bearer '+token}}).then(r=>r.text());
-    const w=parseFloat(capText.match(/westBoundLongitude>([\d.\-]+)/)?.[1]);
-    const e2=parseFloat(capText.match(/eastBoundLongitude>([\d.\-]+)/)?.[1]);
-    const s=parseFloat(capText.match(/southBoundLatitude>([\d.\-]+)/)?.[1]);
-    const n=parseFloat(capText.match(/northBoundLatitude>([\d.\-]+)/)?.[1]);
-    const ctr=map.getCenter();
-    if(!isNaN(w)&&(ctr.lng<w||ctr.lng>e2||ctr.lat<s||ctr.lat>n)){
-      st.textContent=`⚠ Carte hors des bounds config (${s.toFixed(0)}°N-${n.toFixed(0)}°N, ${w.toFixed(0)}°-${e2.toFixed(0)}°) → changer dans le dashboard Copernicus`;
-      st.style.color='var(--warn)';
-      toast('⚠ Zone hors des bounds Copernicus — modifier dans le dashboard','warn');
-      // On charge quand même
-    }
-  }catch(e){}
-
-  const wmsUrl = `https://sh.dataspace.copernicus.eu/ogc/wms/${instanceId}`;
-  _sentinelLayer = new SentinelWMSTileLayer(wmsUrl, {
-    layers: layer,
-    format: 'image/png',
-    transparent: true,
-    version: '1.3.0',
-    time: `${date}/${date}`,
-    maxcc: maxcc,
-    opacity,
-    tileSize: 256,
-    uppercase: true,
-    attribution: '© Copernicus/Sentinel Hub',
-  });
-  let _tileLoadCount=0;
+  _sentinelLayer=new SentinelProcessLayer({opacity,tileSize:256,attribution:'© Copernicus/Sentinel Hub'});
   _sentinelLayer.on('tileerror',e=>{
-    st.textContent='✕ Erreur: '+((e.error&&e.error.message)||'tuile non chargée');
+    st.textContent='✕ '+((e.error&&e.error.message)||'Erreur chargement tuile');
     st.style.color='var(--danger)';
   });
   _sentinelLayer.on('tileload',()=>{
-    _tileLoadCount++;
     st.textContent=`✓ ${layer} · ${date} · nuages ≤${maxcc}%`;
     st.style.color='var(--green)';
   });
