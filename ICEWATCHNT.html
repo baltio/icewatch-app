@@ -977,10 +977,12 @@ select.f-ctrl option{background:var(--bg3);}
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px;flex-wrap:wrap">
             <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">COUCHE :</span>
             <select id="sh-layer" style="background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:3px 6px;outline:none" onchange="saveSentinelSettings()">
-              <option value="TRUE_COLOR">Vraies couleurs</option>
-              <option value="FALSE_COLOR">Fausses couleurs (IR)</option>
-              <option value="NDSI">NDSI (neige/glace)</option>
+              <option value="TRUE-COLOR">Vraies couleurs</option>
+              <option value="TRUE-COLOR-HIGHLIGHT-OPTIMIZED">Vraies couleurs optimisées</option>
+              <option value="FALSE-COLOR">Fausses couleurs (IR)</option>
               <option value="NDVI">NDVI (végétation)</option>
+              <option value="NDWI">NDWI (eau/glace)</option>
+              <option value="NDMI">NDMI (humidité)</option>
             </select>
             <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">NUAGES ≤</span>
             <input id="sh-maxcc" type="number" min="0" max="100" value="30" style="width:48px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:3px 5px;outline:none" oninput="saveSentinelSettings()"/>
@@ -3722,7 +3724,7 @@ function saveSentinelSettings(){
     instanceId:document.getElementById('sh-instance-id')?.value||'',
     email:document.getElementById('sh-email')?.value||'',
     date:document.getElementById('sh-date')?.value||'',
-    layer:document.getElementById('sh-layer')?.value||'TRUE_COLOR',
+    layer:document.getElementById('sh-layer')?.value||'TRUE-COLOR',
     maxcc:document.getElementById('sh-maxcc')?.value||'30',
     opacity:document.getElementById('sh-opacity')?.value||'85',
   };
@@ -3734,7 +3736,7 @@ function loadSentinelSettings(){
     if(document.getElementById('sh-instance-id')) document.getElementById('sh-instance-id').value=s.instanceId||'';
     if(document.getElementById('sh-email')) document.getElementById('sh-email').value=s.email||'';
     if(document.getElementById('sh-date')) document.getElementById('sh-date').value=s.date||todayISO();
-    if(document.getElementById('sh-layer')) document.getElementById('sh-layer').value=s.layer||'TRUE_COLOR';
+    if(document.getElementById('sh-layer')) document.getElementById('sh-layer').value=s.layer||'TRUE-COLOR';
     if(document.getElementById('sh-maxcc')) document.getElementById('sh-maxcc').value=s.maxcc||'30';
     if(document.getElementById('sh-opacity')){
       document.getElementById('sh-opacity').value=s.opacity||'85';
@@ -3770,14 +3772,22 @@ async function findLatestSentinelDate(){
     const end=new Date();
     const start=new Date(end-90*864e5);
     const dt=`${start.toISOString().slice(0,10)}T00:00:00Z/${end.toISOString().slice(0,10)}T23:59:59Z`;
-    // Endpoint STAC Search Copernicus Data Space
-    const url=`https://catalogue.dataspace.copernicus.eu/stac/search?collections=SENTINEL-2&bbox=${bbox}&datetime=${dt}&limit=50`;
-    const resp=await fetch(url);
-    if(!resp.ok) throw new Error('Catalogue HTTP '+resp.status);
-    const data=await resp.json();
-    // Trier par date décroissante (plus récent en premier)
-    const features=(data.features||[]).sort((a,b)=>new Date(b.properties.datetime)-new Date(a.properties.datetime));
-    if(!features.length) throw new Error('Aucune image dans les 90 derniers jours sur cette zone');
+    // Tenter plusieurs noms de collection Copernicus Data Space
+    const collections=['SENTINEL-2-L2A','SENTINEL-2'];
+    let features=[];
+    for(const col of collections){
+      const url=`https://catalogue.dataspace.copernicus.eu/stac/search?collections=${col}&bbox=${bbox}&datetime=${dt}&limit=50&sortby=-datetime`;
+      try{
+        const resp=await fetch(url);
+        if(!resp.ok) continue;
+        const data=await resp.json();
+        features=data.features||[];
+        if(features.length) break;
+      }catch(e){ continue; }
+    }
+    if(!features.length) throw new Error('Aucune image dans les 90 derniers jours sur cette zone — essayer nuages ≤100%');
+    // Trier par date décroissante
+    features.sort((a,b)=>new Date(b.properties.datetime)-new Date(a.properties.datetime));
     // Chercher d'abord une image ≤ seuil nuages, sinon prendre la plus récente
     const match=features.find(f=>(f.properties?.['eo:cloud_cover']??100)<=maxcc)||features[0];
     const date=match.properties.datetime.slice(0,10);
