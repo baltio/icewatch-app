@@ -952,11 +952,19 @@ select.f-ctrl option{background:var(--bg3);}
         <!-- Sentinel-2 overlay panel -->
         <div id="sentinel-bar" style="display:none;margin-top:10px;padding:10px;background:rgba(9,21,37,.7);border:1px solid rgba(61,212,240,.18);border-radius:5px;gap:0">
           <div style="font-family:'Teko',sans-serif;font-size:12px;letter-spacing:1.5px;color:var(--accent);margin-bottom:8px">🛰 SENTINEL-2 · COPERNICUS</div>
+          <!-- Auth Copernicus -->
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:5px">COMPTE <a href="https://dataspace.copernicus.eu" target="_blank" style="color:var(--accent3);text-decoration:none">(gratuit ↗)</a></div>
+          <div style="display:flex;gap:4px;margin-bottom:5px">
+            <input id="sh-email" type="email" placeholder="email@copernicus.eu" style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 7px;outline:none" oninput="saveSentinelSettings()"/>
+          </div>
+          <div style="display:flex;gap:4px;margin-bottom:7px">
+            <input id="sh-password" type="password" placeholder="mot de passe" style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 7px;outline:none"/>
+          </div>
           <!-- Instance ID -->
           <div style="margin-bottom:7px">
-            <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:3px">INSTANCE ID <a href="https://shapps.dataspace.copernicus.eu/dashboard/#/" target="_blank" style="color:var(--accent3);text-decoration:none">(obtenir gratuit ↗)</a></div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:3px">INSTANCE ID <a href="https://shapps.dataspace.copernicus.eu/dashboard/#/" target="_blank" style="color:var(--accent3);text-decoration:none">(dashboard ↗)</a></div>
             <div style="display:flex;gap:4px">
-              <input id="sh-instance-id" type="text" placeholder="ex: 9d5592a3-..." style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 7px;outline:none" oninput="saveSentinelSettings()"/>
+              <input id="sh-instance-id" type="text" placeholder="ex: 11f08a8e-4635-..." style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 7px;outline:none" oninput="saveSentinelSettings()"/>
             </div>
           </div>
           <!-- Date -->
@@ -3685,11 +3693,33 @@ toggleOverlay=function(k){
 // ║  SENTINEL-2 WMS OVERLAY (Copernicus Data Space)          ║
 // ╚══════════════════════════════════════════════════════════╝
 let _sentinelLayer=null, _sentinelActive=false;
+let _shToken=null, _shTokenExpiry=0, _shRefreshTimer=null;
+
+async function _getShToken(){
+  if(_shToken && Date.now() < _shTokenExpiry - 60000) return _shToken;
+  const email=(document.getElementById('sh-email')?.value||'').trim();
+  const pass=(document.getElementById('sh-password')?.value||'').trim();
+  if(!email||!pass) throw new Error('Email et mot de passe Copernicus requis');
+  const resp=await fetch('https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({grant_type:'password',client_id:'cdse-public',username:email,password:pass})
+  });
+  if(!resp.ok){
+    const e=await resp.json().catch(()=>({}));
+    throw new Error(e.error_description||('Erreur auth HTTP '+resp.status));
+  }
+  const d=await resp.json();
+  _shToken=d.access_token;
+  _shTokenExpiry=Date.now()+d.expires_in*1000;
+  return _shToken;
+}
 
 // Persistance des réglages en localStorage
 function saveSentinelSettings(){
   const s={
     instanceId:document.getElementById('sh-instance-id')?.value||'',
+    email:document.getElementById('sh-email')?.value||'',
     date:document.getElementById('sh-date')?.value||'',
     layer:document.getElementById('sh-layer')?.value||'TRUE_COLOR',
     maxcc:document.getElementById('sh-maxcc')?.value||'30',
@@ -3701,6 +3731,7 @@ function loadSentinelSettings(){
   try{
     const s=JSON.parse(localStorage.getItem('sh_settings')||'{}');
     if(document.getElementById('sh-instance-id')) document.getElementById('sh-instance-id').value=s.instanceId||'';
+    if(document.getElementById('sh-email')) document.getElementById('sh-email').value=s.email||'';
     if(document.getElementById('sh-date')) document.getElementById('sh-date').value=s.date||todayISO();
     if(document.getElementById('sh-layer')) document.getElementById('sh-layer').value=s.layer||'TRUE_COLOR';
     if(document.getElementById('sh-maxcc')) document.getElementById('sh-maxcc').value=s.maxcc||'30';
@@ -3728,10 +3759,10 @@ function toggleSentinelOverlay(){
   }
 }
 
-function applySentinelLayer(){
+async function applySentinelLayer(){
   const instanceId=(document.getElementById('sh-instance-id')?.value||'').trim();
   if(!instanceId){
-    document.getElementById('sh-status').textContent='⚠ Instance ID requis — créer un compte gratuit sur dataspace.copernicus.eu';
+    document.getElementById('sh-status').textContent='⚠ Instance ID requis — voir dashboard Copernicus';
     document.getElementById('sh-status').style.color='var(--warn)';
     return;
   }
@@ -3740,8 +3771,20 @@ function applySentinelLayer(){
   const maxcc=parseInt(document.getElementById('sh-maxcc')?.value||'30');
   const opacity=parseInt(document.getElementById('sh-opacity')?.value||'85')/100;
   saveSentinelSettings();
+  // Obtenir token OAuth2
+  document.getElementById('sh-status').textContent='🔑 Authentification Copernicus…';
+  document.getElementById('sh-status').style.color='var(--text3)';
+  let token;
+  try{
+    token=await _getShToken();
+  }catch(e){
+    document.getElementById('sh-status').textContent='✕ Auth: '+e.message;
+    document.getElementById('sh-status').style.color='var(--danger)';
+    return;
+  }
   // Supprimer l'ancienne couche
   if(_sentinelLayer){map.removeLayer(_sentinelLayer);_sentinelLayer=null;}
+  if(_shRefreshTimer){clearTimeout(_shRefreshTimer);_shRefreshTimer=null;}
   const wmsUrl=`https://sh.dataspace.copernicus.eu/ogc/wms/${instanceId}`;
   _sentinelLayer=L.tileLayer.wms(wmsUrl,{
     layers:layer,
@@ -3751,11 +3794,11 @@ function applySentinelLayer(){
     time:`${date}/${date}`,
     maxcc,
     opacity,
+    access_token:token,
     attribution:'© Copernicus / Sentinel Hub',
-    crossOrigin:true,
   });
   _sentinelLayer.on('tileerror',()=>{
-    document.getElementById('sh-status').textContent='✕ Erreur — vérifier Instance ID ou choisir une autre date (nuages?)';
+    document.getElementById('sh-status').textContent='✕ Erreur tuile — date sans image? Essayer date récente ou nuages ≤100%';
     document.getElementById('sh-status').style.color='var(--danger)';
   });
   _sentinelLayer.on('tileload',()=>{
@@ -3766,6 +3809,9 @@ function applySentinelLayer(){
   document.getElementById('sh-status').textContent='Chargement…';
   document.getElementById('sh-status').style.color='var(--text3)';
   toast('🛰 Sentinel-2 activé','ok');
+  // Renouvellement automatique du token avant expiration
+  const refreshIn=Math.max(60000,_shTokenExpiry-Date.now()-120000);
+  _shRefreshTimer=setTimeout(()=>{if(_sentinelActive&&_sentinelLayer) applySentinelLayer();},refreshIn);
 }
 
 function clearSentinelLayer(){
