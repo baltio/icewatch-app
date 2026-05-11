@@ -3823,6 +3823,11 @@ async function applySentinelLayer(){
     'NDMI':'//VERSION=3\nfunction setup(){return{input:["B08","B11"],output:{bands:3}}}\nfunction colorize(v){if(v>0.3)return[0,0.3,0.8];if(v>0)return[0.5,0.7,0.9];if(v>-0.3)return[0.9,0.8,0.5];return[0.8,0.5,0.2]}function evaluatePixel(s){return colorize((s.B08-s.B11)/(s.B08+s.B11))}',
   };
   const evalscript=EVALSCRIPTS[layer]||EVALSCRIPTS['TRUE-COLOR'];
+  // Fenêtre de 30 jours : Sentinel-2 n'a pas d'image chaque jour (orbite ~5 jours)
+  const dateTo=new Date(date+'T23:59:59Z');
+  const dateFrom=new Date(dateTo.getTime()-30*24*3600*1000);
+  const timeFrom=dateFrom.toISOString().split('.')[0]+'Z';
+  const timeTo=dateTo.toISOString().split('.')[0]+'Z';
 
   // GridLayer via API Process Copernicus (pas de WMS, pas de configuration instance requise)
   const SentinelProcessLayer=L.GridLayer.extend({
@@ -3834,7 +3839,7 @@ async function applySentinelLayer(){
       const body={
         input:{
           bounds:{bbox:[sw.lng,sw.lat,ne.lng,ne.lat],properties:{crs:'http://www.opengis.net/def/crs/EPSG/0/4326'}},
-          data:[{type:'sentinel-2-l2a',dataFilter:{timeRange:{from:date+'T00:00:00Z',to:date+'T23:59:59Z'},maxCloudCoverage:maxcc}}]
+          data:[{type:'sentinel-2-l2a',dataFilter:{timeRange:{from:timeFrom,to:timeTo},maxCloudCoverage:maxcc}}]
         },
         output:{width:256,height:256,responses:[{identifier:'default',format:{type:'image/png'}}]},
         evalscript
@@ -3851,7 +3856,7 @@ async function applySentinelLayer(){
     }
   });
 
-  _sentinelLayer=new SentinelProcessLayer({opacity,tileSize:256,attribution:'© Copernicus/Sentinel Hub'});
+  _sentinelLayer=new SentinelProcessLayer({opacity,tileSize:256,minZoom:7,attribution:'© Copernicus/Sentinel Hub'});
   _sentinelLayer.on('tileerror',e=>{
     st.textContent='✕ '+((e.error&&e.error.message)||'Erreur chargement tuile');
     st.style.color='var(--danger)';
