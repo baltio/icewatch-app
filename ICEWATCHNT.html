@@ -3839,6 +3839,23 @@ async function applySentinelLayer(){
     }
   });
 
+  // Vérifier les bounds de la configuration avant de charger
+  try{
+    const capUrl=`https://sh.dataspace.copernicus.eu/ogc/wms/${instanceId}?SERVICE=WMS&REQUEST=GetCapabilities`;
+    const capText=await fetch(capUrl,{headers:{Authorization:'Bearer '+token}}).then(r=>r.text());
+    const w=parseFloat(capText.match(/westBoundLongitude>([\d.\-]+)/)?.[1]);
+    const e2=parseFloat(capText.match(/eastBoundLongitude>([\d.\-]+)/)?.[1]);
+    const s=parseFloat(capText.match(/southBoundLatitude>([\d.\-]+)/)?.[1]);
+    const n=parseFloat(capText.match(/northBoundLatitude>([\d.\-]+)/)?.[1]);
+    const ctr=map.getCenter();
+    if(!isNaN(w)&&(ctr.lng<w||ctr.lng>e2||ctr.lat<s||ctr.lat>n)){
+      st.textContent=`⚠ Carte hors des bounds config (${s.toFixed(0)}°N-${n.toFixed(0)}°N, ${w.toFixed(0)}°-${e2.toFixed(0)}°) → changer dans le dashboard Copernicus`;
+      st.style.color='var(--warn)';
+      toast('⚠ Zone hors des bounds Copernicus — modifier dans le dashboard','warn');
+      // On charge quand même
+    }
+  }catch(e){}
+
   const wmsUrl = `https://sh.dataspace.copernicus.eu/ogc/wms/${instanceId}`;
   _sentinelLayer = new SentinelWMSTileLayer(wmsUrl, {
     layers: layer,
@@ -3852,11 +3869,13 @@ async function applySentinelLayer(){
     uppercase: true,
     attribution: '© Copernicus/Sentinel Hub',
   });
+  let _tileLoadCount=0;
   _sentinelLayer.on('tileerror',e=>{
     st.textContent='✕ Erreur: '+((e.error&&e.error.message)||'tuile non chargée');
     st.style.color='var(--danger)';
   });
   _sentinelLayer.on('tileload',()=>{
+    _tileLoadCount++;
     st.textContent=`✓ ${layer} · ${date} · nuages ≤${maxcc}%`;
     st.style.color='var(--green)';
   });
