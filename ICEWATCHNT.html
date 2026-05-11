@@ -3767,16 +3767,18 @@ async function findLatestSentinelDate(){
     const b=map.getBounds();
     const bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(v=>+v.toFixed(4)).join(',');
     const maxcc=parseInt(document.getElementById('sh-maxcc')?.value||'100');
-    // Interroger le catalogue STAC Copernicus (pas d'auth requise)
-    const end=new Date(); const start=new Date(end-90*864e5);
+    const end=new Date();
+    const start=new Date(end-90*864e5);
     const dt=`${start.toISOString().slice(0,10)}T00:00:00Z/${end.toISOString().slice(0,10)}T23:59:59Z`;
-    const url=`https://catalogue.dataspace.copernicus.eu/stac/collections/SENTINEL-2/items?bbox=${bbox}&datetime=${dt}&limit=50&sortby=-datetime`;
+    // Endpoint STAC Search Copernicus Data Space
+    const url=`https://catalogue.dataspace.copernicus.eu/stac/search?collections=SENTINEL-2&bbox=${bbox}&datetime=${dt}&limit=50`;
     const resp=await fetch(url);
     if(!resp.ok) throw new Error('Catalogue HTTP '+resp.status);
     const data=await resp.json();
-    const features=data.features||[];
+    // Trier par date décroissante (plus récent en premier)
+    const features=(data.features||[]).sort((a,b)=>new Date(b.properties.datetime)-new Date(a.properties.datetime));
     if(!features.length) throw new Error('Aucune image dans les 90 derniers jours sur cette zone');
-    // Chercher d'abord une image avec nuages ≤ seuil, sinon prendre la plus récente
+    // Chercher d'abord une image ≤ seuil nuages, sinon prendre la plus récente
     const match=features.find(f=>(f.properties?.['eo:cloud_cover']??100)<=maxcc)||features[0];
     const date=match.properties.datetime.slice(0,10);
     const cc=match.properties['eo:cloud_cover']!=null?Math.round(match.properties['eo:cloud_cover'])+'%':'?';
