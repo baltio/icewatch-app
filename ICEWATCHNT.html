@@ -971,6 +971,7 @@ select.f-ctrl option{background:var(--bg3);}
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px;flex-wrap:wrap">
             <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">DATE :</span>
             <input id="sh-date" type="date" style="background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 7px;outline:none" oninput="saveSentinelSettings()"/>
+            <button onclick="findLatestSentinelDate()" title="Trouver la dernière image disponible sur la zone" style="padding:3px 7px;background:rgba(61,212,240,.1);border:1px solid var(--accent);border-radius:3px;color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;white-space:nowrap">🔍 Dernière dispo</button>
           </div>
           <!-- Layer + Cloud -->
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px;flex-wrap:wrap">
@@ -3756,6 +3757,36 @@ function toggleSentinelOverlay(){
   } else {
     bar.style.display='none';
     clearSentinelLayer();
+  }
+}
+
+async function findLatestSentinelDate(){
+  const st=document.getElementById('sh-status');
+  if(st){st.textContent='🔍 Recherche de la dernière image disponible…';st.style.color='var(--text3)';}
+  try{
+    const b=map.getBounds();
+    const bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(v=>+v.toFixed(4)).join(',');
+    const maxcc=parseInt(document.getElementById('sh-maxcc')?.value||'100');
+    // Interroger le catalogue STAC Copernicus (pas d'auth requise)
+    const end=new Date(); const start=new Date(end-90*864e5);
+    const dt=`${start.toISOString().slice(0,10)}T00:00:00Z/${end.toISOString().slice(0,10)}T23:59:59Z`;
+    const url=`https://catalogue.dataspace.copernicus.eu/stac/collections/SENTINEL-2/items?bbox=${bbox}&datetime=${dt}&limit=50&sortby=-datetime`;
+    const resp=await fetch(url);
+    if(!resp.ok) throw new Error('Catalogue HTTP '+resp.status);
+    const data=await resp.json();
+    const features=data.features||[];
+    if(!features.length) throw new Error('Aucune image dans les 90 derniers jours sur cette zone');
+    // Chercher d'abord une image avec nuages ≤ seuil, sinon prendre la plus récente
+    const match=features.find(f=>(f.properties?.['eo:cloud_cover']??100)<=maxcc)||features[0];
+    const date=match.properties.datetime.slice(0,10);
+    const cc=match.properties['eo:cloud_cover']!=null?Math.round(match.properties['eo:cloud_cover'])+'%':'?';
+    document.getElementById('sh-date').value=date;
+    saveSentinelSettings();
+    if(st){st.textContent=`✓ Dernière image : ${date} · nuages ${cc}`;st.style.color='var(--green)';}
+    toast(`🛰 Image du ${date} (nuages ${cc})`,'ok');
+  }catch(e){
+    if(st){st.textContent='✕ '+e.message;st.style.color='var(--danger)';}
+    toast('Erreur catalogue: '+e.message,'err');
   }
 }
 
