@@ -1559,6 +1559,11 @@ select.f-ctrl option{background:var(--bg3);}
         <input type="checkbox" id="rpt-inc-photos" checked onchange="generateReport()"> Photos dans export
       </label>
     </div>
+    <!-- Aperçu carte capturée -->
+    <div id="rpt-map-preview" style="display:none;margin-bottom:8px;position:relative">
+      <img id="rpt-map-thumb" src="" style="width:100%;border-radius:4px;border:1px solid var(--border2);max-height:180px;object-fit:cover">
+      <button onclick="_mapSnapshot=null;document.getElementById('rpt-map-preview').style.display='none'" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.65);border:none;color:#fff;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:11px;line-height:1">✕</button>
+    </div>
     <textarea id="report-text" readonly></textarea>
     <div class="sep"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
@@ -1568,6 +1573,8 @@ select.f-ctrl option{background:var(--bg3);}
       <button class="btn btn-p" onclick="downloadReportPDF()">🖨 Imprimer / PDF</button>
       <button class="btn btn-s" onclick="exportPOIsGeoJSON()">📤 Export GeoJSON</button>
       <button class="btn btn-p" onclick="shareReport()">🔗 Partager</button>
+      <button class="btn btn-s" onclick="captureMapForReport()">📷 Capturer carte</button>
+      <button class="btn btn-d" id="rpt-del-snap" onclick="_mapSnapshot=null;document.getElementById('rpt-map-preview').style.display='none';document.getElementById('rpt-del-snap').style.display='none'" style="display:none">✕ Retirer capture</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
       <button class="btn btn-p" onclick="exportMissionZIP()">📦 Export complet (.zip)</button>
@@ -1782,6 +1789,7 @@ select.f-ctrl option{background:var(--bg3);}
 <script src="https://unpkg.com/proj4@2.11.0/dist/proj4.js"></script>
 <script src="https://unpkg.com/proj4leaflet@1.0.2/src/proj4leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 'use strict';
 // ╔══════════════════════════════════════════════════════════╗
@@ -5447,6 +5455,36 @@ function downloadReport(){
   a.download='rapport-icewatch-'+new Date().toISOString().slice(0,10)+'.txt';
   a.click();
 }
+
+// ── CAPTURE CARTE POUR RAPPORT ──────────────────────────────
+let _mapSnapshot=null;
+
+async function captureMapForReport(){
+  if(typeof html2canvas==='undefined'){toast('html2canvas non chargé — veillez à être en ligne','warn');return;}
+  hideModal('report-ov');
+  toast('📷 Capture de la carte...','ok');
+  await new Promise(r=>setTimeout(r,350));
+  try{
+    const canvas=await html2canvas(document.getElementById('leaflet-map'),{
+      useCORS:true,
+      allowTaint:false,
+      scale:Math.min(window.devicePixelRatio||1,2),
+      logging:false,
+      imageTimeout:10000
+    });
+    _mapSnapshot=canvas.toDataURL('image/jpeg',0.85);
+    document.getElementById('rpt-map-preview').style.display='block';
+    document.getElementById('rpt-map-thumb').src=_mapSnapshot;
+    document.getElementById('rpt-del-snap').style.display='block';
+    showModal('report-ov');
+    toast('✅ Carte capturée — incluse dans l\'export','ok');
+  }catch(e){
+    console.warn('[captureMap]',e);
+    showModal('report-ov');
+    toast('⚠️ Capture impossible (tuiles cross-origin)','warn');
+  }
+}
+
 async function downloadReportHTML(){
   const incPhotos=document.getElementById('rpt-inc-photos')?.checked!==false;
   // Charger les photos via le helper dbIdx (évite _db)
@@ -5490,6 +5528,7 @@ footer{margin-top:32px;border-top:1px solid #1a3050;padding-top:8px;color:#3a507
 </style></head><body>
 <h1>🧊 Rapport de Mission — Reconnaissance Glace</h1>
 <p><b>Date:</b> ${dateStr}</p>${navire}
+${_mapSnapshot?`<div style="margin:16px 0"><img src="${_mapSnapshot}" style="width:100%;max-height:480px;object-fit:contain;border-radius:6px;border:1px solid #1a3050" alt="Carte du vol"></div>`:''}
 ${trkHtml?`<h2>TRACES</h2><ul>${trkHtml}</ul>`:''}
 ${wpHtml?`<h2>POINTS D'INTÉRÊT</h2>${wpHtml}`:''}
 ${zoneHtml?`<h2>ZONES ANNOTÉES</h2><ul>${zoneHtml}</ul>`:''}
@@ -5553,6 +5592,7 @@ footer{margin-top:24px;border-top:1px solid #c0d8ec;padding-top:6px;font-size:9p
 </style></head><body>
 <h1>🧊 Rapport de Mission — Reconnaissance Glace</h1>
 <p><b>Date :</b> ${dateStr}</p>${navire}<p><b>Points d'intérêt :</b> ${S.wps.length} | <b>Traces :</b> ${(S.trks||[]).length}</p>
+${_mapSnapshot?`<div style="margin:14px 0;page-break-inside:avoid"><img src="${_mapSnapshot}" style="width:100%;max-height:420px;object-fit:contain;border-radius:5px;border:1px solid #b0cce0" alt="Carte du vol"></div>`:''}
 ${trkHtml?`<h2>Traces de vol</h2><ul>${trkHtml}</ul>`:''}
 ${wpHtml?`<h2>Points d'intérêt</h2>${wpHtml}`:''}
 ${zoneHtml?`<h2>Zones annotées</h2><ul>${zoneHtml}</ul>`:''}
