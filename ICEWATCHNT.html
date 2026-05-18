@@ -752,6 +752,8 @@ select.f-ctrl option{background:var(--bg3);}
       <span class="nav-icon">📋</span><span>Checklist pré-vol</span></div>
     <div class="nav-item" onclick="generateReport();showModal('report-ov')">
       <span class="nav-icon">📄</span><span>Rapport de mission</span></div>
+    <div class="nav-item" onclick="loadMissions();showModal('missions-ov')">
+      <span class="nav-icon">🗄</span><span>Archives de Vol</span></div>
     <div class="nav-item" onclick="showModal('zones-ov')">
       <span class="nav-icon">🗺</span><span>Zones annotées</span></div>
     <div class="nav-item" onclick="promptSetHome()">
@@ -1745,6 +1747,19 @@ select.f-ctrl option{background:var(--bg3);}
   </div>
 </div>
 
+<!-- ARCHIVES DE VOL -->
+<div class="modal-ov" id="missions-ov">
+  <div class="modal-box">
+    <div class="modal-title accent">🗄 Archives de Vol</div>
+    <div id="missions-list"></div>
+    <div class="sep"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <button class="btn btn-p" onclick="promptArchiveSession()">📦 Archiver session</button>
+      <button class="btn btn-s" onclick="hideModal('missions-ov')">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- PHOTO VIEWER -->
 <div class="modal-ov" id="photo-ov">
   <div class="modal-box" id="photo-modal-box">
@@ -1825,7 +1840,7 @@ const S = {
 let db;
 async function openDB(){
   return new Promise((res,rej)=>{
-    const r=indexedDB.open('icewatch_db',6);
+    const r=indexedDB.open('icewatch_db',7);
     r.onupgradeneeded=e=>{
       const d=e.target.result;
       if(!d.objectStoreNames.contains('wp'))  d.createObjectStore('wp',{keyPath:'id'});
@@ -1843,6 +1858,9 @@ async function openDB(){
       }
       if(e.oldVersion < 6){
         if(!d.objectStoreNames.contains('sentinel_tiles')) d.createObjectStore('sentinel_tiles',{keyPath:'id'});
+      }
+      if(e.oldVersion < 7){
+        if(!d.objectStoreNames.contains('missions')) d.createObjectStore('missions',{keyPath:'id'});
       }
     };
     r.onsuccess=e=>res(e.target.result);
@@ -3083,7 +3101,169 @@ async function deleteTrack(id){
   renderTracksList();toast('🗑 Trace supprimée');
 }
 
-function exportCurrentTrack(){
+// ╔══════════════════════════════════════════════════════════╗
+// ║  ARCHIVES DE VOL                                         ║
+// ╚══════════════════════════════════════════════════════════╝
+let _missions=[];
+
+async function loadMissions(){
+  _missions=await dbAll('missions');
+  _missions.sort((a,b)=>b.date-a.date);
+  renderMissionsList();
+}
+
+function renderMissionsList(){
+  const c=document.getElementById('missions-list');
+  if(!_missions.length){
+    c.innerHTML=`<div class="empty"><div class="empty-ico">🗄</div><div class="empty-txt">Aucune archive</div><div class="empty-sub">Archivez la session active après chaque vol</div></div>`;
+    return;
+  }
+  c.innerHTML=_missions.map(m=>`
+    <div class="trk-item">
+      <div class="trk-name">✈ ${m.name}</div>
+      <div class="trk-dt">${new Date(m.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>
+      <div class="trk-stats">
+        <span>📍 ${m.wpIds.length} pt(s)</span>
+        <span>📶 ${m.trkIds.length} trace(s)</span>
+        ${m.notes?`<span style="color:var(--text3)">📝 ${m.notes.slice(0,50)}${m.notes.length>50?'…':''}</span>`:''}
+      </div>
+      <div class="trk-acts">
+        <button class="btn btn-p" style="padding:3px 8px;font-size:9px" onclick="displayMission('${m.id}')">📍 Afficher</button>
+        <button class="btn btn-s" style="padding:3px 8px;font-size:9px" onclick="reportMission('${m.id}')">📄 Rapport</button>
+        <button class="btn btn-d" style="padding:3px 8px;font-size:9px" onclick="deleteMission('${m.id}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+async function promptArchiveSession(){
+  if(!S.wps.length&&!S.trks.length){toast('⚠️ Aucun waypoint ni trace à archiver','warn');return;}
+  const d=new Date();
+  const defName=`Vol du ${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
+  const name=prompt('Nom de ce vol / mission :',defName);
+  if(!name) return;
+  const notes=prompt('Notes (optionnel) :','')??'';
+  await archiveSession(name.trim(),notes.trim());
+}
+
+async function archiveSession(name,notes=''){
+  const mission={id:gid(),name,notes,date:Date.now(),wpIds:S.wps.map(w=>w.id),trkIds:S.trks.map(t=>t.id)};
+  await dbPut('missions',mission);
+  _missions.unshift(mission);
+  renderMissionsList();
+  toast(`✅ "${name}" archivé (${mission.wpIds.length} pts, ${mission.trkIds.length} trace(s))`,'ok');
+  setTimeout(()=>{
+    if(confirm(`Vol "${name}" archivé ✅\n\nVider la session active pour repartir à zéro pour le prochain vol ?`)){
+      clearActiveSession();
+    }
+  },400);
+}
+
+async function clearActiveSession(){
+  trackGrp.clearLayers();
+  S.wps.forEach(wp=>{
+    if(wpMarkers[wp.id]){wpGrp.removeLayer(wpMarkers[wp.id]);delete wpMarkers[wp.id];}
+    if(wpSectors[wp.id]){wpGrp.removeLayer(wpSectors[wp.id]);delete wpSectors[wp.id];}
+  });
+  S.wps=[];S.trks=[];
+  document.getElementById('sb-wps').textContent='0';
+  document.getElementById('sb-trks').textContent='0';
+  toast('🧹 Session vidée — prêt pour le prochain vol','ok');
+}
+
+async function displayMission(id){
+  const m=_missions.find(x=>x.id===id);if(!m){toast('Mission introuvable','err');return;}
+  let wpCount=0,trkCount=0;
+  for(const wpId of m.wpIds){
+    if(S.wps.find(w=>w.id===wpId)) continue;
+    const wp=await dbGet('wp',wpId);
+    if(wp){S.wps.push(wp);addWpMarker(wp);wpCount++;}
+  }
+  for(const trkId of m.trkIds){
+    if(S.trks.find(t=>t.id===trkId)) continue;
+    const trk=await dbGet('trk',trkId);
+    if(trk){
+      S.trks.push(trk);
+      if(trk.pts&&trk.pts.length>1){
+        for(let i=1;i<trk.pts.length;i++){
+          const p0=trk.pts[i-1],p1=trk.pts[i];
+          L.polyline([[p0.lat,p0.lng],[p1.lat,p1.lng]],{color:altColor(p1.alt),weight:4,opacity:.8,lineCap:'round'}).addTo(trackGrp);
+        }
+      }
+      trkCount++;
+    }
+  }
+  document.getElementById('sb-wps').textContent=S.wps.length;
+  document.getElementById('sb-trks').textContent=S.trks.length;
+  const allWps=m.wpIds.map(id=>S.wps.find(w=>w.id===id)).filter(Boolean);
+  if(allWps.length>0) map.fitBounds(L.latLngBounds(allWps.map(w=>[w.lat,w.lng])),{padding:[50,50]});
+  hideModal('missions-ov');switchView('map');
+  toast(`📍 "${m.name}" — ${wpCount} pt(s) + ${trkCount} trace(s) affichés`,'ok');
+}
+
+async function reportMission(id){
+  const m=_missions.find(x=>x.id===id);if(!m) return;
+  const wps=[],trks=[];
+  for(const wpId of m.wpIds){const wp=await dbGet('wp',wpId);if(wp)wps.push(wp);}
+  for(const trkId of m.trkIds){const trk=await dbGet('trk',trkId);if(trk)trks.push(trk);}
+  const now=new Date(m.date);
+  const dateStr=now.toLocaleDateString('fr-FR')+' '+now.toLocaleTimeString('fr-FR');
+  let r='';
+  r+='═══════════════════════════════════════════\n';
+  r+='  RAPPORT DE MISSION — RECONNAISSANCE GLACE\n';
+  r+='═══════════════════════════════════════════\n';
+  r+=`Mission : ${m.name}\n`;
+  r+=`Date    : ${dateStr}\n`;
+  if(m.notes) r+=`Notes   : ${m.notes}\n`;
+  r+='\n';
+  if(trks.length){
+    r+='── TRACES ──────────────────────────────────\n';
+    trks.forEach(t=>{const dist=((t.recDist||t.dist||0)/1852).toFixed(2);r+=`• ${t.name} | ${dist} NM | ${fmtDur(t.end-t.start)}\n`;});
+    r+='\n';
+  }
+  if(wps.length){
+    r+='── POINTS D\'INTÉRÊT ─────────────────────────\n';
+    wps.forEach(wp=>{
+      r+=`${(WP_CFGS[wp.type]||WP_CFGS.note).e} ${wp.name}\n`;
+      r+=`  ${fmtDM(wp.lat,'lat')} / ${fmtDM(wp.lng,'lon')}\n`;
+      if(wp.phAlt!=null||wp.phBearing!=null) r+=`  📷 ${wp.phAlt!=null?wp.phAlt+'ft ':''} ${wp.phBearing!=null?Math.round(wp.phBearing)+'°':''}\n`;
+      if(wp.comment) r+=`  ${wp.comment}\n`;
+      if(wp.ice&&wp.ice.conc>0) r+=`  🧊 Conc:${wp.ice.conc}/10 Type:${wp.ice.type||'?'} Floe:${wp.ice.floe||'?'} Ridge:${wp.ice.ridge}/5\n`;
+      if(wp.phIds&&wp.phIds.length) r+=`  📷 ${wp.phIds.length} photo(s)\n`;
+      r+='\n';
+    });
+  }
+  r+='═══════════════════════════════════════════\n';
+  r+=`Généré le ${new Date().toLocaleString('fr-FR')} par IceWatch NT\n`;
+  const ta=document.getElementById('report-text');
+  if(ta) ta.value=r;
+  hideModal('missions-ov');showModal('report-ov');
+}
+
+async function deleteMission(id){
+  const m=_missions.find(x=>x.id===id);if(!m) return;
+  if(!confirm(`Supprimer le vol "${m.name}" ?\n${m.wpIds.length} point(s) et ${m.trkIds.length} trace(s) seront effacés définitivement.`)) return;
+  for(const wpId of m.wpIds){
+    const phs=await dbIdx('ph','wpId',wpId);
+    for(const ph of phs) await dbDel('ph',ph.id);
+    if(db.objectStoreNames.contains('docs')){const docs=await dbIdx('docs','wpId',wpId);for(const d of docs) await dbDel('docs',d.id);}
+    const audios=await dbIdx('audio','wpId',wpId);
+    for(const au of audios) await dbDel('audio',au.id);
+    await dbDel('wp',wpId);
+    if(wpMarkers[wpId]){wpGrp.removeLayer(wpMarkers[wpId]);delete wpMarkers[wpId];}
+    if(wpSectors[wpId]){wpGrp.removeLayer(wpSectors[wpId]);delete wpSectors[wpId];}
+  }
+  S.wps=S.wps.filter(w=>!m.wpIds.includes(w.id));
+  for(const trkId of m.trkIds) await dbDel('trk',trkId);
+  S.trks=S.trks.filter(t=>!m.trkIds.includes(t.id));
+  await dbDel('missions',id);
+  _missions=_missions.filter(x=>x.id!==id);
+  document.getElementById('sb-wps').textContent=S.wps.length;
+  document.getElementById('sb-trks').textContent=S.trks.length;
+  renderMissionsList();
+  toast(`🗑 Vol "${m.name}" supprimé`,'ok');
+}
+
+
   if(S.recPts.length===0){toast('⚠️ Aucune trace en cours','warn');return;}
   exportTrackGPXData({name:'Trace en cours',start:S.recStart,pts:S.recPts});
 }
@@ -4607,6 +4787,7 @@ function showModal(id){
   document.getElementById(id).classList.add('open');
   if(id==='wps-ov') renderWpsList();
   if(id==='tracks-ov') renderTracksList();
+  if(id==='missions-ov') renderMissionsList();
   if(id==='dl-ov'){updateCacheInfo();updZoom();}
   if(id==='settings-ov') openSettings();
   if(id==='checklist-ov') initChecklist();
