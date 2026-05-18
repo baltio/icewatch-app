@@ -1542,16 +1542,33 @@ select.f-ctrl option{background:var(--bg3);}
 <div class="modal-ov" id="report-ov">
   <div class="modal-box">
     <div class="modal-title accent">📄 Rapport de Mission</div>
+    <!-- Options de contenu -->
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:5px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="rpt-inc-trk" checked onchange="generateReport()"> Traces
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="rpt-inc-wp" checked onchange="generateReport()"> Waypoints
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="rpt-inc-zone" checked onchange="generateReport()"> Zones
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="rpt-inc-photos" checked onchange="generateReport()"> Photos dans export
+      </label>
+    </div>
     <textarea id="report-text" readonly></textarea>
     <div class="sep"></div>
-    <div class="btn-row">
-      <button class="btn btn-s" onclick="copyReport()">📋 Copier</button>
-      <button class="btn btn-s" onclick="downloadReport()">⬇ .txt</button>
-      <button class="btn btn-s" onclick="downloadReportHTML()">🌐 .html</button>
-      <button class="btn btn-p" onclick="downloadReportPDF()">🖨 PDF</button>
-      <button class="btn btn-s" onclick="exportPOIsGeoJSON()">📤 GeoJSON</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+      <button class="btn btn-s" onclick="copyReport()">📋 Copier texte</button>
+      <button class="btn btn-s" onclick="downloadReport()">⬇ Télécharger .txt</button>
+      <button class="btn btn-s" onclick="downloadReportHTML()">🌐 Export .html</button>
+      <button class="btn btn-p" onclick="downloadReportPDF()">🖨 Imprimer / PDF</button>
+      <button class="btn btn-s" onclick="exportPOIsGeoJSON()">📤 Export GeoJSON</button>
       <button class="btn btn-p" onclick="shareReport()">🔗 Partager</button>
-      <button class="btn btn-p" onclick="exportMissionZIP()">📦 Export complet</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <button class="btn btn-p" onclick="exportMissionZIP()">📦 Export complet (.zip)</button>
       <button class="btn btn-s" onclick="hideModal('report-ov')">Fermer</button>
     </div>
   </div>
@@ -5165,6 +5182,9 @@ async function loadSketches(){
 function generateReport(){
   const now=new Date();
   const dateStr=now.toLocaleDateString('fr-FR')+' '+now.toLocaleTimeString('fr-FR');
+  const incTrk=document.getElementById('rpt-inc-trk')?.checked!==false;
+  const incWp=document.getElementById('rpt-inc-wp')?.checked!==false;
+  const incZone=document.getElementById('rpt-inc-zone')?.checked!==false;
   let r='';
   r+='═══════════════════════════════════════════\n';
   r+='  RAPPORT DE MISSION — RECONNAISSANCE GLACE\n';
@@ -5172,16 +5192,17 @@ function generateReport(){
   r+=`Date: ${dateStr}\n`;
   if(_homePos) r+=`Navire: ${_homePos.name} — ${fmtDM(_homePos.lat,'lat')} / ${fmtDM(_homePos.lng,'lon')}\n`;
   r+='\n';
-  if(S.trks&&S.trks.length){
+  if(incTrk&&S.trks&&S.trks.length){
     r+='── TRACES ──────────────────────────────────\n';
     S.trks.forEach(t=>{const dist=((t.recDist||0)/1852).toFixed(2);const dur=fmtDur(t.end-t.start);r+=`• ${t.name} | ${dist} NM | ${dur}\n`;});
     r+='\n';
   }
-  if(S.wps&&S.wps.length){
+  if(incWp&&S.wps&&S.wps.length){
     r+='── POINTS D\'INTÉRÊT ─────────────────────────\n';
     S.wps.forEach(wp=>{
       r+=`${(WP_CFGS[wp.type]||WP_CFGS.note).e} ${wp.name}\n`;
       r+=`  ${fmtDM(wp.lat,'lat')} / ${fmtDM(wp.lng,'lon')}\n`;
+      if(wp.phAlt!=null||wp.phBearing!=null) r+=`  📷 ${wp.phAlt!=null?wp.phAlt+'ft ':''} ${wp.phBearing!=null?Math.round(wp.phBearing)+'°':''}\n`;
       if(wp.comment) r+=`  ${wp.comment}\n`;
       if(wp.ice) r+=`  🧊 Conc:${wp.ice.conc}/10 Type:${wp.ice.type||'?'} Floe:${wp.ice.floe||'?'} Ridge:${wp.ice.ridge}/5\n`;
       if(wp.phIds&&wp.phIds.length) r+=`  📷 ${wp.phIds.length} photo(s)\n`;
@@ -5189,7 +5210,7 @@ function generateReport(){
       r+='\n';
     });
   }
-  if(_zones&&_zones.length){
+  if(incZone&&_zones&&_zones.length){
     r+='── ZONES ANNOTÉES ───────────────────────────\n';
     _zones.forEach(z=>r+=`• ${z.name} (${z.type}) — ${z.pts.length} sommets\n`);
     r+='\n';
@@ -5246,18 +5267,14 @@ function downloadReport(){
   a.click();
 }
 async function downloadReportHTML(){
-  // Charger toutes les photos de tous les waypoints
+  const incPhotos=document.getElementById('rpt-inc-photos')?.checked!==false;
+  // Charger les photos via le helper dbIdx (évite _db)
   const phByWp={};
-  await new Promise(res=>{
-    const tx=_db.transaction('ph','readonly');
-    const store=tx.objectStore('ph');
-    const idx=store.index('wpId');
-    S.wps.forEach(wp=>{
-      const req=idx.getAll(wp.id);
-      req.onsuccess=e=>{phByWp[wp.id]=e.target.result||[];};
-    });
-    tx.oncomplete=res;
-  });
+  if(incPhotos){
+    for(const wp of S.wps){
+      phByWp[wp.id]=await dbIdx('ph','wpId',wp.id);
+    }
+  }
   const now=new Date();
   const dateStr=now.toLocaleDateString('fr-FR')+' '+now.toLocaleTimeString('fr-FR');
   const icons=Object.fromEntries(Object.entries(WP_CFGS).map(([k,v])=>[k,v.e]));
@@ -5266,8 +5283,9 @@ async function downloadReportHTML(){
     const photos=phByWp[wp.id]||[];
     const iceStr=wp.ice?`<div class="ice">🧊 Conc: <b>${wp.ice.conc}/10</b> | Type: <b>${wp.ice.type||'?'}</b> | Floe: <b>${wp.ice.floe||'?'}</b> | Ridge: <b>${wp.ice.ridge}/5</b></div>`:'';
     const cmtStr=wp.comment?`<div class="cmt">${wp.comment}</div>`:'';
+    const phDirStr=(wp.phAlt!=null||wp.phBearing!=null)?`<div class="ice">📷 ${wp.phAlt!=null?wp.phAlt+'ft ':''} ${wp.phBearing!=null?Math.round(wp.phBearing)+'°':''}</div>`:'';
     const photosHtml=photos.map(ph=>`<img src="${ph.data}" alt="${ph.name}" style="max-width:320px;max-height:240px;border-radius:4px;border:1px solid #2a4060;margin:4px;">`).join('');
-    wpHtml+=`<div class="wp"><div class="wp-head">${icons[wp.type]||'📍'} <b>${wp.name}</b> <span class="coord">${fmtDM(wp.lat,'lat')} / ${fmtDM(wp.lng,'lon')}</span></div>${cmtStr}${iceStr}${photos.length?`<div class="photos">${photosHtml}</div>`:''}</div>`;
+    wpHtml+=`<div class="wp"><div class="wp-head">${icons[wp.type]||'📍'} <b>${wp.name}</b> <span class="coord">${fmtDM(wp.lat,'lat')} / ${fmtDM(wp.lng,'lon')}</span></div>${cmtStr}${phDirStr}${iceStr}${photos.length?`<div class="photos">${photosHtml}</div>`:''}</div>`;
   });
   let zoneHtml='';
   (_zones||[]).forEach(z=>{zoneHtml+=`<li>${z.name} (${z.type}) — ${z.pts.length} sommets</li>`;});
@@ -5303,18 +5321,14 @@ ${zoneHtml?`<h2>ZONES ANNOTÉES</h2><ul>${zoneHtml}</ul>`:''}
 }
 
 async function downloadReportPDF(){
-  // Même contenu que le rapport HTML mais optimisé print (fond blanc, police noire)
+  const incPhotos=document.getElementById('rpt-inc-photos')?.checked!==false;
+  // Charger les photos via le helper dbIdx (évite _db)
   const phByWp={};
-  await new Promise(res=>{
-    const tx=_db.transaction('ph','readonly');
-    const store=tx.objectStore('ph');
-    const idx=store.index('wpId');
-    S.wps.forEach(wp=>{
-      const req=idx.getAll(wp.id);
-      req.onsuccess=e=>{phByWp[wp.id]=e.target.result||[];};
-    });
-    tx.oncomplete=res;
-  });
+  if(incPhotos){
+    for(const wp of S.wps){
+      phByWp[wp.id]=await dbIdx('ph','wpId',wp.id);
+    }
+  }
   const now=new Date();
   const dateStr=now.toLocaleDateString('fr-FR')+' '+now.toLocaleTimeString('fr-FR');
   const icons=Object.fromEntries(Object.entries(WP_CFGS).map(([k,v])=>[k,v.e]));
@@ -5325,7 +5339,8 @@ async function downloadReportPDF(){
     const cmtStr=wp.comment?`<div class="cmt">${wp.comment}</div>`:'';
     const tsStr=wp.ts?`<span class="ts">${new Date(wp.ts).toLocaleString('fr-FR')}</span>`:'';
     const photosHtml=photos.map(ph=>`<img src="${ph.data}" alt="${ph.name||''}">`).join('');
-    wpHtml+=`<div class="wp"><div class="wp-head">${icons[wp.type]||'📍'} <b>${wp.name}</b> ${tsStr}<div class="coord">${fmtDM(wp.lat,'lat')} / ${fmtDM(wp.lng,'lon')}</div></div>${cmtStr}${iceStr}${photos.length?`<div class="photos">${photosHtml}</div>`:''}</div>`;
+    const phDirStr=(wp.phAlt!=null||wp.phBearing!=null)?`<div class="ice">📷 ${wp.phAlt!=null?wp.phAlt+'ft ':''} ${wp.phBearing!=null?Math.round(wp.phBearing)+'°':''}</div>`:'';
+    wpHtml+=`<div class="wp"><div class="wp-head">${icons[wp.type]||'📍'} <b>${wp.name}</b> ${tsStr}<div class="coord">${fmtDM(wp.lat,'lat')} / ${fmtDM(wp.lng,'lon')}</div></div>${cmtStr}${phDirStr}${iceStr}${photos.length?`<div class="photos">${photosHtml}</div>`:''}</div>`;
   });
   let zoneHtml='';(_zones||[]).forEach(z=>{zoneHtml+=`<li>${z.name} (${z.type}) — ${z.pts.length} sommets</li>`;});
   let trkHtml='';(S.trks||[]).forEach(t=>{trkHtml+=`<li>${t.name} | ${((t.recDist||0)/1852).toFixed(2)} NM | ${fmtDur(t.end-t.start)}</li>`;});
@@ -5362,16 +5377,22 @@ ${wpHtml?`<h2>Points d'intérêt</h2>${wpHtml}`:''}
 ${zoneHtml?`<h2>Zones annotées</h2><ul>${zoneHtml}</ul>`:''}
 <footer>Généré le ${dateStr} par IceWatch NT — Commandant Charcot</footer>
 </body></html>`;
-  const w=window.open('','_blank');
-  if(!w){toast('Autorisez les popups pour générer le PDF','warn');return;}
-  w.document.write(html);
-  w.document.close();
-  w.addEventListener('load',()=>{
-    w.focus();
-    w.print();
-  });
-  // Si load ne se déclenche pas (document déjà prêt), imprimer directement
-  setTimeout(()=>{ try{ if(!w.closed){ w.focus(); w.print(); } }catch(e){} },600);
+  // Blob URL : fonctionne sur Android Chrome (pas bloqué comme window.open vide)
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const blobUrl=URL.createObjectURL(blob);
+  const w=window.open(blobUrl,'_blank');
+  if(!w){
+    // Popup bloqué → télécharger le fichier, l'utilisateur imprime depuis le navigateur
+    const a=document.createElement('a');
+    a.href=blobUrl;
+    a.download='rapport-icewatch-print-'+now.toISOString().slice(0,10)+'.html';
+    a.click();
+    toast('Fichier téléchargé — ouvrez-le puis ≡ → Imprimer pour le PDF','ok');
+  } else {
+    w.addEventListener('load',()=>{w.focus();w.print();});
+    setTimeout(()=>{try{if(!w.closed){w.focus();w.print();}}catch(e){}},600);
+  }
+  setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);
 }
 
 // ╔══════════════════════════════════════════════════════════╗
