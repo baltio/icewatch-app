@@ -2290,11 +2290,14 @@ async function toggleRecord(){
     document.getElementById('sb-rec-lbl').textContent='Arrêter trace';
     localStorage.setItem('icewatch-was-recording',JSON.stringify({start:S.recStart,trkId:S.curTrkId,dist:0}));
     S.recTimer=setInterval(updateFlightTime,1000);
-    toast('🔴 Enregistrement démarré','ok');
+    await requestWakeLock(); // garder l'écran allumé = GPS continu
+    toast('🔴 Enregistrement démarré — gardez Chrome au premier plan','ok');
   }else{
     S.rec=false;
     clearInterval(S.recTimer);
     localStorage.removeItem('icewatch-was-recording');
+    // Libérer le wake lock sauf si vue cockpit déjà active
+    if(document.getElementById('tb-cockpit-rows').style.display==='none') releaseWakeLock();
     document.getElementById('hud-dot').classList.add('off');
     document.getElementById('hud-status').textContent='STANDBY';
     document.getElementById('hud-status').className='hud-status standby';
@@ -4504,7 +4507,7 @@ function switchView(name){
   if(name==='icysea') setTimeout(()=>initIceView(),150);
   if(name==='polar') setTimeout(()=>initPolarMap(),150);
   if(name==='cockpit'){requestWakeLock();updateCockpit();}
-  else releaseWakeLock();
+  else if(!S.rec) releaseWakeLock(); // conserver le wake lock pendant un enregistrement
 }
 
 function showModal(id){
@@ -5694,7 +5697,10 @@ document.addEventListener('DOMContentLoaded',async()=>{
   // Sauvegarder état d'enregistrement lors de la mise en veille (ex: ouverture caméra)
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden&&S.rec){
-      localStorage.setItem('icewatch-was-recording',JSON.stringify({start:S.recStart,trkId:S.curTrkId}));
+      localStorage.setItem('icewatch-was-recording',JSON.stringify({start:S.recStart,trkId:S.curTrkId,pts:S.recPts.length}));
+    }
+    if(!document.hidden&&S.rec){
+      requestWakeLock(); // re-acquérir après retour au premier plan (ex: caméra)
     }
   });
 
