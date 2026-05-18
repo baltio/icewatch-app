@@ -1295,6 +1295,22 @@ select.f-ctrl option{background:var(--bg3);}
     </div>
     <div class="f-field">
       <label class="f-lbl">Photos (glace, conditions)</label>
+      <div class="f-row" style="margin-bottom:6px;gap:6px">
+        <div class="f-field" style="flex:1">
+          <label class="f-lbl">Altitude photo (ft)</label>
+          <div style="display:flex;gap:4px">
+            <input class="f-ctrl mono" type="number" id="ph-alt" placeholder="—" min="0" max="30000" step="10" style="flex:1">
+            <button class="btn btn-s" onclick="fillPhAlt()" title="Altitude GPS actuelle">GPS</button>
+          </div>
+        </div>
+        <div class="f-field" style="flex:1">
+          <label class="f-lbl">Direction photo (°)</label>
+          <div style="display:flex;gap:4px">
+            <input class="f-ctrl mono" type="number" id="ph-bearing" placeholder="—" min="0" max="359" step="1" style="flex:1" oninput="previewSector()">
+            <button class="btn btn-s" onclick="fillPhBearing()" title="Cap hélico actuel">HDG</button>
+          </div>
+        </div>
+      </div>
       <div class="photo-grid-add" id="ph-grid">
         <button class="ph-add-btn" title="Prendre une photo" onclick="document.getElementById('ph-cam-input').click()">📷</button>
         <button class="ph-add-btn" title="Choisir dans la galerie" onclick="document.getElementById('ph-gal-input').click()">🖼</button>
@@ -1349,7 +1365,7 @@ select.f-ctrl option{background:var(--bg3);}
       <audio id="voice-player" controls style="display:none;width:100%;margin-top:6px"></audio>
     </div>
     <div class="btn-row">
-      <button class="btn btn-s" onclick="hideModal('wp-ov')">Annuler</button>
+      <button class="btn btn-s" onclick="if(_previewSector){wpGrp.removeLayer(_previewSector);_previewSector=null;}hideModal('wp-ov')">Annuler</button>
       <button class="btn btn-d" id="btn-wp-del" style="display:none" onclick="deleteWaypoint()">Supprimer</button>
       <button class="btn btn-p" onclick="saveWaypoint()">Enregistrer</button>
     </div>
@@ -1832,6 +1848,8 @@ let map, trackGrp, wpGrp, gpxGrp;
 let tileLayers={}, curTL=null;
 let uMarker=null, hdgLine=null;
 let wpMarkers={};
+let wpSectors={}; // secteurs de prise de vue photo (cônes de direction)
+let _previewSector=null; // secteur temporaire pendant l'édition
 
 // Offline-capable tile layer
 // Le Service Worker (icewatch-sw.js) gère déjà le cache-first pour les tuiles.
@@ -2351,6 +2369,9 @@ function openAddWpAt(ll){
   document.getElementById('btn-wp-del').style.display='none';
   selType('note');renderPendingPhotos();
   resetIceForm();resetVoiceForm();
+  // Réinitialiser altitude/direction photo
+  document.getElementById('ph-alt').value=(S.gps?.alt!=null)?Math.round(S.gps.alt*3.28084):'';
+  document.getElementById('ph-bearing').value=(S.hdg!=null&&!isNaN(S.hdg))?Math.round(((S.hdg%360)+360)%360):'';
   // Init position UI
   // Réinitialise les panels sans appeler useGPS (évite le toast)
   document.querySelectorAll('.wp-pos-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.m==='gps'));
@@ -2371,6 +2392,24 @@ function openAddWpAt(ll){
 function openAddWpModal(){
   const ll=S.gps?L.latLng(S.gps.lat,S.gps.lng):map.getCenter();
   openAddWpAt(ll);
+}
+
+function fillPhAlt(){
+  if(S.gps?.alt!=null){document.getElementById('ph-alt').value=Math.round(S.gps.alt*3.28084);}
+  else toast('⚠️ Altitude GPS non disponible','warn');
+}
+function fillPhBearing(){
+  if(S.hdg!=null&&!isNaN(S.hdg)){document.getElementById('ph-bearing').value=Math.round(((S.hdg%360)+360)%360);previewSector();}
+  else toast('⚠️ Cap hélico non disponible','warn');
+}
+function previewSector(){
+  // Apercu temps réel du secteur si lat/lng déjà définis
+  const lat=parseFloat(document.getElementById('wp-lat').value);
+  const lng=parseFloat(document.getElementById('wp-lon').value);
+  const b=parseFloat(document.getElementById('ph-bearing').value);
+  if(isNaN(lat)||isNaN(lng)||isNaN(b)) return;
+  if(_previewSector) wpGrp.removeLayer(_previewSector);
+  _previewSector=L.polygon(_buildSectorPts(lat,lng,b,60,2000),{color:'#ffd600',fillColor:'#ffd600',fillOpacity:0.1,weight:1.5,opacity:0.6,dashArray:'5,4'}).addTo(wpGrp);
 }
 
 function selType(t){
@@ -2632,11 +2671,19 @@ async function saveWaypoint(){
   const audioId=_voiceDataUrl?gid():null;
   if(audioId) await dbPut('audio',{id:audioId,wpId:id,data:_voiceDataUrl,ts:Date.now()});
   await saveWpDocs(id);
-  const wp={id,type:S.selType,name,comment,lat,lng,phIds,ice,audioId,ts:Date.now()};
+  const phAlt=parseFloat(document.getElementById('ph-alt').value);
+  const phBearing=parseFloat(document.getElementById('ph-bearing').value);
+  const wp={id,type:S.selType,name,comment,lat,lng,phIds,ice,audioId,
+    phAlt:isNaN(phAlt)?null:phAlt,
+    phBearing:isNaN(phBearing)?null:phBearing,
+    ts:Date.now()};
   await dbPut('wp',wp);
   const ei=S.wps.findIndex(w=>w.id===id);
-  if(ei>=0){S.wps[ei]=wp;if(wpMarkers[id]){wpGrp.removeLayer(wpMarkers[id]);delete wpMarkers[id];}}
+  if(ei>=0){S.wps[ei]=wp;
+    if(wpMarkers[id]){wpGrp.removeLayer(wpMarkers[id]);delete wpMarkers[id];}
+    if(wpSectors[id]){wpGrp.removeLayer(wpSectors[id]);delete wpSectors[id];}}
   else S.wps.push(wp);
+  if(_previewSector){wpGrp.removeLayer(_previewSector);_previewSector=null;}
   addWpMarker(wp);
   document.getElementById('sb-wps').textContent=S.wps.length;
   hideModal('wp-ov');toast(`✅ "${name}" enregistré`,'ok');
@@ -2680,6 +2727,23 @@ function _wpIceIconHtml(e,c,ice,hasP){
   };
 }
 
+// Calcule les points d'un secteur (cône) de prise de vue photo
+function _buildSectorPts(lat,lng,bearing,fovDeg,radiusM){
+  const R=6371000;
+  const pts=[[lat,lng]];
+  const steps=20;
+  const startA=bearing-fovDeg/2, endA=bearing+fovDeg/2;
+  for(let i=0;i<=steps;i++){
+    const a=(startA+(endA-startA)*(i/steps))*Math.PI/180;
+    const la=lat*Math.PI/180, lo=lng*Math.PI/180, d=radiusM/R;
+    const la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(a));
+    const lo2=lo+Math.atan2(Math.sin(a)*Math.sin(d)*Math.cos(la),Math.cos(d)-Math.sin(la)*Math.sin(la2));
+    pts.push([la2*180/Math.PI,lo2*180/Math.PI]);
+  }
+  pts.push([lat,lng]);
+  return pts;
+}
+
 function addWpMarker(wp){
   const{e,c}=(WP_CFGS[wp.type]||WP_CFGS.note);
   const hasP=wp.phIds&&wp.phIds.length>0;
@@ -2700,6 +2764,7 @@ function addWpMarker(wp){
         ${hasP?`<button onclick="viewWpPhotos('${wp.id}')" style="flex:1;padding:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">📷 ${wp.phIds.length}</button>`:''}
         ${wp.audioId?`<button onclick="playWpAudio('${wp.id}')" style="padding:4px 6px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text2);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer">🎙</button>`:''}
       </div>
+      ${(wp.phBearing!=null||wp.phAlt!=null)?`<div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#ffd600;margin-top:4px">📷 ${wp.phAlt!=null?wp.phAlt+'ft ':''} ${wp.phBearing!=null?Math.round(wp.phBearing)+'°':''}</div>`:''}
       <div id="wp-docs-${wp.id}" style="margin-top:4px"></div>
     </div>`;
   });
@@ -2723,6 +2788,12 @@ function addWpMarker(wp){
   });
   mk.addTo(wpGrp);
   wpMarkers[wp.id]=mk;
+  // Dessiner le secteur de prise de vue si direction connue
+  if(wp.phBearing!=null&&!isNaN(wp.phBearing)){
+    if(wpSectors[wp.id]) wpGrp.removeLayer(wpSectors[wp.id]);
+    const spts=_buildSectorPts(wp.lat,wp.lng,wp.phBearing,60,2000);
+    wpSectors[wp.id]=L.polygon(spts,{color:'#ffd600',fillColor:'#ffd600',fillOpacity:0.12,weight:1.5,opacity:0.7,dashArray:'5,4'}).addTo(wpGrp);
+  }
   _addWpToIceMap(wp);
   const _pieEl=document.getElementById('ice-poi-count');if(_pieEl)_pieEl.textContent=S.wps.length;
 }
@@ -2744,6 +2815,9 @@ async function editWaypoint(id){
   await loadWpDocs(id);
   resetIceForm();populateIceForm(wp.ice||null);
   resetVoiceForm();
+  // Altitude et direction photo
+  document.getElementById('ph-alt').value=wp.phAlt!=null?wp.phAlt:'';
+  document.getElementById('ph-bearing').value=wp.phBearing!=null?Math.round(wp.phBearing):'';
   if(wp.audioId){const auRecs=await dbIdx('audio','wpId',id);if(auRecs.length)populateVoiceForm(auRecs[0].data);}
   renderPendingPhotos();map.closePopup();showModal('wp-ov');
 }
@@ -2757,6 +2831,8 @@ async function deleteWaypoint(){
   await dbDel('wp',S.editWpId);
   S.wps=S.wps.filter(w=>w.id!==S.editWpId);
   if(wpMarkers[S.editWpId]){wpGrp.removeLayer(wpMarkers[S.editWpId]);delete wpMarkers[S.editWpId];}
+  if(wpSectors[S.editWpId]){wpGrp.removeLayer(wpSectors[S.editWpId]);delete wpSectors[S.editWpId];}
+  if(_previewSector){wpGrp.removeLayer(_previewSector);_previewSector=null;}
   document.getElementById('sb-wps').textContent=S.wps.length;
   hideModal('wp-ov');toast('🗑 Point supprimé');
 }
