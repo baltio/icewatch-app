@@ -3263,7 +3263,7 @@ async function deleteMission(id){
   toast(`🗑 Vol "${m.name}" supprimé`,'ok');
 }
 
-
+function exportCurrentTrack(){
   if(S.recPts.length===0){toast('⚠️ Aucune trace en cours','warn');return;}
   exportTrackGPXData({name:'Trace en cours',start:S.recStart,pts:S.recPts});
 }
