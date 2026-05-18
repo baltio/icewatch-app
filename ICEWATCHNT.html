@@ -5386,21 +5386,20 @@ function quickPhotoCapture(){
 function onQuickPhoto(evt){
   const file=evt.target.files[0];
   evt.target.value='';
-  if(!file||!S.gps||!S.gps.lat){return;}
+  if(!file) return;
   const reader=new FileReader();
-  reader.onload=async function(e){
-    const data=e.target.result;
-    const now=new Date();
-    const wp={id:'wp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
-      type:'note',name:'📷 '+now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),
-      comment:'Photo rapide',lat:S.gps.lat,lng:S.gps.lng,phIds:[],ice:null,audioId:null,ts:now.toISOString()};
-    const phId='ph_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
-    const ph={id:phId,wpId:wp.id,name:file.name||'quickphoto.jpg',data:data,ts:wp.ts};
-    wp.phIds=[phId];
-    await new Promise(res=>{const tx=_db.transaction(['wp','ph'],'readwrite');tx.objectStore('wp').add(wp);tx.objectStore('ph').add(ph);tx.oncomplete=res;});
-    S.wps.push(wp);
-    addWpMarker(wp);
-    toast('📷 Point photo créé','ok');
+  reader.onload=function(e){
+    resizeImg(e.target.result,1280,dataUrl=>{
+      // Ouvrir le modal waypoint avec la photo déjà chargée
+      const ll=S.gps?L.latLng(S.gps.lat,S.gps.lng):null;
+      openAddWpAt(ll); // réinitialise S.pendPh et ouvre le modal
+      // Injecter la photo après reset (openAddWpAt remet pendPh=[])
+      S.pendPh.push({id:gid(),name:file.name||'quickphoto.jpg',data:dataUrl,isNew:true});
+      renderPendingPhotos();
+      // Nom auto basé sur l'heure
+      const now=new Date();
+      document.getElementById('wp-name').value='📷 '+now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    });
   };
   reader.readAsDataURL(file);
 }
